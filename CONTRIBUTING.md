@@ -14,7 +14,7 @@ Bug reports, documentation fixes, new tests and focused features are all welcome
 
 ## Development
 
-Requirements: bash, Docker, Python 3 with `jsonschema` and `referencing`, and Node.js 22 or newer.
+Requirements: bash, Docker with Compose v2 and Buildx, Python 3 with `jsonschema` and `referencing`, and Node.js 22 or newer.
 `luacheck`, `busted`, `shellcheck` and `node` are used from your `PATH` when present, otherwise from pinned Docker images.
 
 ```bash
@@ -22,14 +22,21 @@ pip install jsonschema referencing
 tests/run.sh
 ```
 
-`tests/run.sh` runs luacheck, the busted plugin tests, shellcheck, the finalize and `scripts/meet` tests, the reference app tests, the contract check and the Prosody config check.
-CI runs the same script on every pull request.
+`tests/run.sh` runs luacheck, the busted plugin tests, shellcheck, the finalize and `scripts/meet` tests, the reference app tests, the contract check, the Prosody config check, the image definition check and a `deploy/compose.yml` check.
+CI runs the same script on every pull request, and the `Images` workflow builds every release image.
 
 For changes that touch Prosody, Jicofo or the compose files, also bring up the localhost example and run the live check:
 
 ```bash
 scripts/meet init example && scripts/meet up example
 tests/stack-check.sh example
+```
+
+For changes to `images/`, `deploy/` or anything the images carry, build the images locally and run the stack check against a folder made from `deploy/` (see [docs/upgrade.md](docs/upgrade.md#cutting-a-release)):
+
+```bash
+UPSTREAM_VERSION=$(cat UPSTREAM_VERSION) REGISTRY=meet.local TAGS=dev docker buildx bake --load
+tests/stack-check.sh --dir /path/to/test-deployment
 ```
 
 ## Pull requests

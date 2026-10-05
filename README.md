@@ -12,8 +12,11 @@ Your LMS, telehealth portal, community platform or internal tool integrates thro
 ## Why
 
 - **No fork.**
-  Upstream images and compose files run exactly as Jitsi ships them.
-  This repository only mounts plugins, config fragments and scripts into them.
+  Upstream images run exactly as Jitsi ships them.
+  This repository only adds plugins, config fragments and scripts on top, either baked into thin release images or mounted from a checkout.
+- **Versioned like a dependency.**
+  Every release publishes `ghcr.io/nowshad7/meet-<service>:<version>` images.
+  A server needs a compose file, its settings and secrets: upgrading is bumping one version, rolling back is setting it back.
 - **Settings-only multi-tenant.**
   Every deployment is one folder of settings and branding.
   Run as many separate deployments as you need from the same code, never a per-customer branch.
@@ -21,6 +24,7 @@ Your LMS, telehealth portal, community platform or internal tool integrates thro
   JSON schemas, examples and a runnable reference app describe exactly what your app signs, answers and receives.
 - **Upgrade-safe.**
   One file pins the Jitsi release, and `scripts/meet upgrade <tag>` reports every upstream change that can affect you before you bump it.
+  Each meet-service release bakes that pin into its images, so a deployment upgrades or rolls back by changing `MEET_VERSION`.
 
 ## Architecture
 
@@ -107,6 +111,20 @@ Your app implements up to four things, all described in [contract/README.md](con
 
 ## Deploy to production
 
+On a server, run the published images; no clone of this repository is needed:
+
+```bash
+mkdir acme && cd acme                     # your deployment folder, ideally in a private repository
+base=https://raw.githubusercontent.com/nowshad7/meet-service/v1.0.0/deploy
+curl -fsSL -O "$base/compose.yml" -O "$base/secrets.env.example"
+curl -fsSL "$base/env.example" -o .env    # set MEET_VERSION, domain, TLS, app URLs, plugins
+docker compose up -d                      # after generating secrets.env and the data tree
+```
+
+[docs/deploy.md](docs/deploy.md#deploy-from-published-images) walks through it, including branding, the landing page and language strings, and the settings that `scripts/meet` derives for you on the checkout path.
+
+From a checkout, the same deployment runs with `scripts/meet`:
+
 ```bash
 scripts/meet new-deployment acme          # copies deployments/_template
 $EDITOR deployments/acme/deployment.env   # domain, TLS, app URLs, plugins
@@ -128,7 +146,8 @@ tests/run.sh                          # then bring up staging and run tests/stac
 ```
 
 The report lists added and removed environment variables, Jicofo and Prosody template changes and changes to the upstream Prosody modules the plugins depend on.
-See [docs/upgrade.md](docs/upgrade.md).
+A release tag `vX.Y.Z` then publishes the images; deployments on published images upgrade by setting `MEET_VERSION=X.Y.Z` and running `docker compose up -d`, and roll back the same way.
+See [docs/upgrade.md](docs/upgrade.md), including [how to cut a release](docs/upgrade.md#cutting-a-release).
 
 ## Scaling
 
@@ -144,7 +163,9 @@ See [docs/upgrade.md](docs/upgrade.md).
 | `UPSTREAM_VERSION` | The pinned `docker-jitsi-meet` release; images and upstream compose files use the same tag |
 | `prosody/plugins/` | The Prosody plugins (`mod_meet_*`) |
 | `prosody/conf.d/` | Prosody config fragments; every secret and per-deployment value comes from the environment |
-| `compose/` | Compose override for every deployment plus one file per optional feature |
+| `compose/` | Compose override for every checkout deployment plus one file per optional feature |
+| `images/`, `docker-bake.hcl` | The release images: one Dockerfile target per service, built on the pinned upstream images |
+| `deploy/` | Template folder for a deployment on published images: `compose.yml`, `env.example`, `secrets.env.example`, `brand/` |
 | `services/` | Recording finalize script and the optional app proxy |
 | `web/` | Default web config, landing page, close page and brand |
 | `deployments/` | `_template`, the localhost `example` and `example-production`; your own deployments live here or in `MEET_DEPLOYMENTS_DIR` |
@@ -163,6 +184,7 @@ They are switched on with the upstream environment variables `XMPP_MODULES` and 
 Their settings come from fragments mounted into `/config/conf.d/`, which the upstream Prosody config pulls in with `Include "conf.d/*.cfg.lua"`; the fragments read secrets with `os.getenv`, so nothing secret is written into a file.
 Web branding and config use the upstream `custom-config.js`, `custom-interface_config.js`, `plugin.head.html` and `nginx-custom` hooks the same way.
 `scripts/meet env <name>` prints exactly which compose files and derived settings a deployment gets.
+The release images put the same files in the same places at build time instead of mounting them: the plugins go into upstream's `/prosody-plugins/`, and a start-up step copies the config defaults where the upstream start-up scripts read `/config` overrides from.
 
 **Can I use it without JWT, room gate or webhooks?**
 Yes.
@@ -170,7 +192,7 @@ Every plugin and feature is opt-in per deployment, and anything you leave out is
 
 **Does it work with Jitsi as a Service, Kubernetes or Helm?**
 It targets `docker-jitsi-meet` with Docker Compose.
-The plugins and config fragments are plain Prosody files, so they can be mounted the same way in other setups, but only Compose is tested here.
+The release images take the same environment variables as the upstream ones, so they can replace them in other setups, but only Compose is tested here.
 
 **Why is the control key separate from the join key?**
 A user can read their own join token from the browser.
@@ -178,7 +200,8 @@ If the same key also authorised kick and end-meeting calls, any user could remov
 See [docs/architecture.md](docs/architecture.md#why-a-separate-control-key).
 
 **Where do my deployments live?**
-In `deployments/<name>/` (gitignored) or in any folder you point `MEET_DEPLOYMENTS_DIR` at, for example a private repository.
+On published images, each deployment is its own folder anywhere, for example in a private repository, holding `compose.yml`, `.env` and `brand/`.
+On a checkout, in `deployments/<name>/` (gitignored) or in any folder you point `MEET_DEPLOYMENTS_DIR` at.
 Secrets stay in `secrets.env` next to the settings and are always gitignored.
 
 ## Contributing

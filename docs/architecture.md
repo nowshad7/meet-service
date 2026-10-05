@@ -41,7 +41,7 @@ flowchart TB
 
 | Component | Source | What this repository adds |
 |---|---|---|
-| web, prosody, jicofo, jvb, jibri | Official `docker-jitsi-meet` images and compose files at `UPSTREAM_VERSION`, unmodified | Mounts and environment from `compose/` |
+| web, prosody, jicofo, jvb, jibri | Official `docker-jitsi-meet` images at `UPSTREAM_VERSION`, unmodified | Release images built on them (`images/`, `deploy/compose.yml`), or mounts and environment from `compose/` on a checkout |
 | Prosody plugins | `prosody/plugins/mod_meet_*.lua` | Events, privacy, control, single session |
 | Prosody settings | `prosody/conf.d/*.cfg.lua` | Read every secret and per-deployment value from the environment |
 | Recording hand-off | `services/recording-finalize/finalize.sh` | Jibri finalize script that uploads to the app |
@@ -49,7 +49,8 @@ flowchart TB
 | Web | `web/` + `deployments/<name>/brand/` | Behaviour config, landing page, close page, branding |
 
 Upstream is never patched or forked.
-The plugins are mounted read-only into `/prosody-plugins-custom`, which upstream Prosody already searches first.
+On a checkout, the plugins are mounted read-only into `/prosody-plugins-custom`, which upstream Prosody already searches first.
+The release images add them to upstream's own `/prosody-plugins/` instead, leaving `/prosody-plugins-custom` free for a deployment's own plugins.
 
 ## Feature switches
 

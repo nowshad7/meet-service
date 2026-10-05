@@ -1,7 +1,15 @@
 # Deploying
 
-Every deployment is one folder of settings and the same `scripts/meet` commands, on a laptop and in production alike.
-Requirements on the host: Linux with Docker and Compose v2, git, openssl and bash.
+There are two ways to run a deployment, and both start from one folder of settings.
+
+- **Published images (recommended for servers).**
+  Every release publishes `ghcr.io/nowshad7/meet-<service>:<version>` images with the plugins, config fragments, web defaults and scripts built in.
+  The server needs only Docker, a compose file and the deployment folder; no clone of this repository and no `docker-jitsi-meet` checkout.
+  See [Deploy from published images](#deploy-from-published-images).
+- **A checkout of this repository.**
+  `scripts/meet` runs the stock Jitsi images and mounts the plugins and config from the checkout.
+  This is the contributor path and what the localhost example uses; the rest of this page describes it unless a section says otherwise.
+  Requirements on the host: Linux with Docker and Compose v2, git, openssl and bash.
 
 ## Try it on localhost
 
@@ -11,7 +19,132 @@ The [README quick start](../README.md#quick-start-5-minutes-localhost) walks thr
 The example sets `JVB_ADVERTISE_IPS=127.0.0.1`, so only browsers on the same machine get media.
 To test from another device on your network, add the host's LAN address, for example `JVB_ADVERTISE_IPS=127.0.0.1,192.168.1.20`, and open `https://192.168.1.20:8443` there after changing `PUBLIC_URL` to match.
 
-## A new deployment
+## Deploy from published images
+
+A release tag `vX.Y.Z` publishes six images, all built on the same pinned Jitsi release (`UPSTREAM_VERSION`) and tagged `X.Y.Z` and `latest`:
+
+| Image | Built on | Adds |
+|---|---|---|
+| `meet-prosody` | `ghcr.io/jitsi/prosody` | The `mod_meet_*` plugins in `/prosody-plugins/` and the `prosody/conf.d/` fragments |
+| `meet-web` | `ghcr.io/jitsi/web` | `custom-config.js`, `nginx-custom/`, the default brand and the landing page |
+| `meet-jicofo` | `ghcr.io/jitsi/jicofo` | `JICOFO_ENABLE_REST=1` |
+| `meet-jvb` | `ghcr.io/jitsi/jvb` | Nothing; published so one version pins every service |
+| `meet-jibri` | `ghcr.io/jitsi/jibri` | The recording finalize script, set as `JIBRI_FINALIZE_RECORDING_SCRIPT_PATH` |
+| `meet-app-proxy` | `nginx:alpine` | The app proxy config |
+
+Nothing upstream is patched: the images only add files, and a small start-up step copies the config defaults to where the upstream start-up scripts already look for `/config` overrides.
+
+### The deployment folder
+
+[deploy/](../deploy/) is the template for one deployment:
+
+```text
+acme/
+  compose.yml           deploy/compose.yml from the release you run, unchanged
+  .env                  settings, from deploy/env.example; commit it to your private repository
+  secrets.env           generated once on the server, never committed
+  brand/                files that replace or add to the default brand
+  compose.override.yml  optional: your own mounts, for example lang/main.json or landing/
+  data/                 runtime data (CONFIG), created on the server
+```
+
+### Set it up
+
+1. Copy `deploy/` at the release tag you want and fill `.env`:
+
+   ```bash
+   mkdir acme && cd acme
+   base=https://raw.githubusercontent.com/nowshad7/meet-service/v1.0.0/deploy
+   curl -fsSL -O "$base/compose.yml" -O "$base/secrets.env.example"
+   curl -fsSL "$base/env.example" -o .env
+   mkdir brand
+   $EDITOR .env
+   ```
+
+   Set `MEET_VERSION` to the release (`1.0.0`) and `COMPOSE_PROJECT_NAME`, then the same settings as any deployment (see [Settings](#settings)).
+2. Generate the secrets once:
+
+   ```bash
+   while IFS= read -r line; do [[ $line == *= ]] && line+=$(openssl rand -hex 24); echo "$line"; done \
+     <secrets.env.example >secrets.env && chmod 600 secrets.env
+   ```
+
+3. Create the data tree for the user the images run as (uid 1000):
+
+   ```bash
+   mkdir -p data/{web,jicofo,jvb,jibri} data/prosody/{config,prosody-plugins-custom} \
+     data/storage/{web,prosody,transcripts,jibri/logs,jibri/recordings} data/tmp/web-load-test
+   sudo chown -R 1000:1000 data
+   ```
+
+4. Start it:
+
+   ```bash
+   docker compose up -d
+   docker compose ps
+   ```
+
+Every `docker compose` command works from the folder as usual: `logs -f prosody`, `restart web`, `down` (never `down -v`, it deletes all Jitsi state).
+From any checkout of this repository, `tests/stack-check.sh --dir /path/to/acme` checks health and that every plugin in `MEET_PLUGINS` is loaded and answering.
+
+### Settings for the image path
+
+`.env` takes the same settings as a `deployment.env`, with three differences, because no `scripts/meet` runs to derive anything:
+
+| Instead of | Set in `.env` |
+|---|---|
+| `MEET_FEATURES=recording` | `COMPOSE_PROFILES=recording`, `ENABLE_RECORDING=1`, `ENABLE_SERVICE_RECORDING=1` |
+| `MEET_FEATURES=app-proxy` | `COMPOSE_PROFILES=app-proxy` and `MEET_APP_PROXY_HOST` (both features: `COMPOSE_PROFILES=recording,app-proxy`) |
+| `scripts/meet` deriving the plugin settings | The derived values themselves, per plugin below |
+
+| `MEET_PLUGINS` entry | Also set |
+|---|---|
+| `events` | `MEET_EVENTS=1` |
+| `room-gate` | `PROSODY_RESERVATION_ENABLED=1`, `PROSODY_RESERVATION_REST_BASE_URL=${MEET_APP_API_URL}` |
+| `control` | `muc_end_meeting,meet_control` appended to `XMPP_MODULES` |
+| `single-session` | `meet_single_session` appended to `XMPP_MUC_MODULES` |
+| `privacy` | `meet_privacy` appended to `XMPP_MUC_MODULES` |
+| `AUTH_TYPE=jwt` | `JWT_ASAP_KEYSERVER=${MEET_APP_KEYS_URL}` and `XMPP_MUC_CONFIGURATION` as in `env.example` |
+
+Keep `MEET_PLUGINS` itself in `.env`: the stack check reads it to know what must be loaded, which catches a plugin listed there but missing from the derived settings.
+`scripts/meet env <name>` in a checkout prints the derived values for an existing `deployment.env`, which is the quickest way to move a deployment to the image path.
+`.env` values may refer to earlier ones with `${NAME}`.
+`MEET_IMAGE_REPO` (default `ghcr.io/nowshad7`) points at another registry, for example a fork's.
+
+### Brand, landing page and language
+
+- **Brand.**
+  The default brand is built into `meet-web`.
+  At start-up the container copies it to a working folder and then copies the deployment's `brand/` (mounted at `/meet/brand`) over it, so a deployment replaces or adds files by name, exactly as with `scripts/meet`.
+  After changing a brand file, run `docker compose restart web`.
+- **Landing page and language strings.**
+  Mount them with `compose.override.yml`, which Compose reads automatically:
+
+  ```yaml
+  services:
+    web:
+      volumes:
+        - ./landing:/usr/share/jitsi-meet/static/landing:ro
+        - ./lang/main.json:/usr/share/jitsi-meet/lang/main.json:ro
+  ```
+
+A file in the data folder takes precedence over the built-in default of the same name, for example `data/web/custom-config.js` or `data/prosody/config/conf.d/meet.cfg.lua`.
+An empty one would silently switch the defaults off, so the containers refuse to start with a message naming it.
+This happens when a data folder that `scripts/meet` used is reused: Docker leaves empty files behind where it mounted single files.
+Delete them once when you move such a deployment to the images:
+
+```bash
+rm -f data/web/custom-config.js data/web/custom-interface_config.js \
+  data/prosody/config/conf.d/meet.cfg.lua data/prosody/config/conf.d/meet-events.cfg.lua
+```
+
+### Upgrade and roll back
+
+Set `MEET_VERSION` to the new release, read its notes, replace `compose.yml` with the one from the same tag if it changed, and run `docker compose up -d`.
+Rolling back is the same with the previous version.
+See [upgrade.md](upgrade.md#deployments-on-published-images).
+
+## A new deployment from a checkout
 
 1. Create the folder from the template:
 
