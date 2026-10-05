@@ -14,7 +14,8 @@ There are two ways to run a deployment, and both start from one folder of settin
 ## Try it on localhost
 
 `deployments/example/` runs on `https://localhost:8443` together with the [reference app](../examples/app-node/README.md) on `http://localhost:3000`.
-The [README quick start](../README.md#quick-start-5-minutes-localhost) walks through it.
+`scripts/meet init example` and `scripts/meet up example` start it, as in [Develop from a checkout](../README.md#develop-from-a-checkout).
+The [README quick start](../README.md#quick-start-localhost-published-images) runs the same localhost setup on the published images.
 
 The example sets `JVB_ADVERTISE_IPS=127.0.0.1`, so only browsers on the same machine get media.
 To test from another device on your network, add the host's LAN address, for example `JVB_ADVERTISE_IPS=127.0.0.1,192.168.1.20`, and open `https://192.168.1.20:8443` there after changing `PUBLIC_URL` to match.
@@ -33,6 +34,7 @@ A release tag `vX.Y.Z` publishes six images, all built on the same pinned Jitsi 
 | `meet-app-proxy` | `nginx:alpine` | The app proxy config |
 
 Nothing upstream is patched: the images only add files, and a small start-up step copies the config defaults to where the upstream start-up scripts already look for `/config` overrides.
+The images appear on GHCR with the first release tag, `v1.0.0`; until then, build them locally as described in [upgrade.md](upgrade.md#cutting-a-release).
 
 ### The deployment folder
 
