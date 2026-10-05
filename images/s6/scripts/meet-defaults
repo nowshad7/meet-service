@@ -1,0 +1,37 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+DEFAULTS=/meet/defaults
+DEPLOYMENT_BRAND=/meet/brand
+RUN_BRAND=/run/meet/brand
+
+merge_brand() {
+  [[ -d "$DEFAULTS/brand" ]] || return 0
+  mkdir -p "$RUN_BRAND"
+  cp -R "$DEFAULTS/brand/." "$RUN_BRAND"
+  if [[ -d "$DEPLOYMENT_BRAND" ]]; then
+    cp -R "$DEPLOYMENT_BRAND/." "$RUN_BRAND"
+  fi
+  if [[ -f "$RUN_BRAND/custom-interface_config.js" ]]; then
+    cp "$RUN_BRAND/custom-interface_config.js" "$MEET_RUN_CONFIG/"
+  fi
+}
+
+seed_config() {
+  mkdir -p "$MEET_RUN_CONFIG"
+  cp -R "$DEFAULTS/config/." "$MEET_RUN_CONFIG"
+}
+
+refuse_empty_overrides() {
+  local file
+  while IFS= read -r file; do
+    if [[ -f "/config/$file" && ! -s "/config/$file" ]]; then
+      echo "meet: /config/$file is empty and would replace the built-in $file; delete it from the data folder" >&2
+      return 1
+    fi
+  done < <(cd "$MEET_RUN_CONFIG" && find . -type f -printf '%P\n')
+}
+
+seed_config
+merge_brand
+refuse_empty_overrides

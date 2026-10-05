@@ -3,7 +3,7 @@ services:
     image: nginx:alpine
     restart: ${RESTART_POLICY:-unless-stopped}
     extra_hosts:
-      - "${MEET_APP_PROXY_HOST}:host-gateway"
+      - "host.docker.internal:host-gateway"
     environment:
       - MEET_APP_PROXY_HOST
     volumes:
