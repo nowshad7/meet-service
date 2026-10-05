@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/webhook-room-destroyed.schema.json",
+  "title": "POST {MEET_APP_API_URL}/events/room/destroyed",
+  "type": "object",
+  "required": [
+    "event_name",
+    "is_breakout",
+    "room_jid",
+    "room_name",
+    "created_at",
+    "destroyed_at",
+    "all_occupants"
+  ],
+  "properties": {
+    "event_name": {
+      "const": "muc-room-destroyed"
+    },
+    "is_breakout": {
+      "type": "boolean"
+    },
+    "room_jid": {
+      "type": "string"
+    },
+    "room_name": {
+      "type": "string"
+    },
+    "meeting_id": {
+      "type": "string"
+    },
+    "breakout_room_id": {
+      "type": "string",
+      "description": "Breakout rooms only; room_jid and room_name then name the main room"
+    },
+    "breakout_meeting_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "destroyed_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "all_occupants": {
+      "type": "array",
+      "items": {
+        "$ref": "occupant.schema.json"
+      }
+    }
+  }
+}

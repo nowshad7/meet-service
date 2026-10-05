@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/occupant.schema.json",
+  "title": "Occupant in webhook payloads",
+  "type": "object",
+  "required": [
+    "occupant_jid",
+    "joined_at"
+  ],
+  "properties": {
+    "occupant_jid": {
+      "type": "string"
+    },
+    "joined_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "left_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "id": {
+      "type": "string",
+      "description": "context.user.id from the join token"
+    },
+    "name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "total_dominant_speaker_time": {
+      "type": "integer",
+      "description": "Milliseconds; on left and destroyed payloads"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Every other context.user field from the join token is copied in as well"
+}

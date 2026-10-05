@@ -1,0 +1,8 @@
+{
+  "event_name": "muc-room-created",
+  "created_at": 1791100990,
+  "is_breakout": false,
+  "room_jid": "[acme]6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33@muc.meet.jitsi",
+  "room_name": "[acme]6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33",
+  "meeting_id": "0c2d1a64-5d0e-4c3f-9b7a-2f5e8d9c1a11"
+}

@@ -1,0 +1,10 @@
+.upstream/
+.data/
+secrets.env
+*.tar.gz
+node_modules/
+
+deployments/*
+!deployments/_template/
+!deployments/example/
+!deployments/example-production/

@@ -1,0 +1,22 @@
+{
+  "event_name": "muc-room-destroyed",
+  "created_at": 1791100990,
+  "destroyed_at": 1791104610,
+  "all_occupants": [
+    {
+      "occupant_jid": "[acme]6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33@muc.meet.jitsi/8a1f2c3d",
+      "joined_at": 1791101000,
+      "id": "8891",
+      "name": "Alex Example",
+      "email": "alex@example.org",
+      "moderator": false,
+      "affiliation": "member",
+      "left_at": 1791104600,
+      "total_dominant_speaker_time": 184000
+    }
+  ],
+  "is_breakout": false,
+  "room_jid": "[acme]6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33@muc.meet.jitsi",
+  "room_name": "[acme]6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33",
+  "meeting_id": "0c2d1a64-5d0e-4c3f-9b7a-2f5e8d9c1a11"
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/webhook-room-created.schema.json",
+  "title": "POST {MEET_APP_API_URL}/events/room/created",
+  "type": "object",
+  "required": [
+    "event_name",
+    "is_breakout",
+    "room_jid",
+    "room_name",
+    "created_at"
+  ],
+  "properties": {
+    "event_name": {
+      "const": "muc-room-created"
+    },
+    "is_breakout": {
+      "type": "boolean"
+    },
+    "room_jid": {
+      "type": "string"
+    },
+    "room_name": {
+      "type": "string"
+    },
+    "meeting_id": {
+      "type": "string"
+    },
+    "breakout_room_id": {
+      "type": "string",
+      "description": "Breakout rooms only; room_jid and room_name then name the main room"
+    },
+    "breakout_meeting_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    }
+  }
+}

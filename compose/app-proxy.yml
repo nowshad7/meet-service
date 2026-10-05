@@ -1,0 +1,18 @@
+services:
+  app-proxy:
+    image: nginx:alpine
+    restart: ${RESTART_POLICY:-unless-stopped}
+    extra_hosts:
+      - "${MEET_APP_PROXY_HOST}:host-gateway"
+    environment:
+      - MEET_APP_PROXY_HOST
+    volumes:
+      - ${MEET_ROOT}/services/app-proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      meet.jitsi:
+        aliases:
+          - ${MEET_APP_PROXY_ALIAS:-app.internal}
+
+  prosody:
+    extra_hosts:
+      - "${MEET_APP_PROXY_HOST}:host-gateway"

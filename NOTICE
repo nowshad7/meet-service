@@ -1,0 +1,13 @@
+meet-service
+Copyright 2026 The meet-service contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+prosody/plugins/mod_meet_events.lua is adapted from mod_event_sync_component
+in jitsi-contrib/prosody-plugins (https://github.com/jitsi-contrib/prosody-plugins),
+licensed under the Apache License, Version 2.0.
+
+This product runs on, but does not include or modify, Jitsi Meet and
+docker-jitsi-meet (https://github.com/jitsi), Copyright 8x8, Inc. and the Jitsi
+contributors, licensed under the Apache License, Version 2.0. Jitsi and Jitsi Meet
+are trademarks of their respective owners.

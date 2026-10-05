@@ -1,0 +1,18 @@
+{
+  "logoImageUrl": "/static/brand/logo.svg",
+  "backgroundColor": "#11161F",
+  "premeetingBackground": "linear-gradient(180deg, #1A2230 0%, #11161F 100%)",
+  "customTheme": {
+    "palette": {
+      "surface01": "#11161F",
+      "surface02": "#1A2230",
+      "surface03": "#232D3F",
+      "action01": "#3D7BF7",
+      "hover01": "#2F6AE0",
+      "active01": "#2459C4",
+      "focus01": "#3D7BF7",
+      "textColor01": "#FFFFFF",
+      "textColor02": "#AAB4C3"
+    }
+  }
+}

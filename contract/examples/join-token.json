@@ -1,0 +1,30 @@
+{
+  "iss": "example-app",
+  "aud": "jitsi",
+  "sub": "acme",
+  "room": "6f1c2b9e-4a77-4f0e-9a1e-2c1f9a7d1b33",
+  "nbf": 1791100800,
+  "exp": 1791108000,
+  "context": {
+    "user": {
+      "id": "8891",
+      "name": "Alex Example",
+      "email": "alex@example.org",
+      "moderator": false,
+      "affiliation": "member"
+    },
+    "group": "team-42",
+    "features": {
+      "recording": false,
+      "screen-sharing": false,
+      "transcription": false,
+      "livestreaming": false,
+      "outbound-call": false
+    },
+    "room": {
+      "privacy": true,
+      "publicChat": false,
+      "lobby_autostart": false
+    }
+  }
+}

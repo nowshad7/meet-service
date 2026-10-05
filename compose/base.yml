@@ -1,0 +1,28 @@
+services:
+  web:
+    volumes:
+      - ${MEET_ROOT}/web/custom-config.js:/config/custom-config.js:ro
+      - ${MEET_BRAND_DIR}/custom-interface_config.js:/config/custom-interface_config.js:ro
+      - ${MEET_BRAND_DIR}/plugin.head.html:/usr/share/jitsi-meet/plugin.head.html:ro
+      - ${MEET_BRAND_DIR}:/usr/share/jitsi-meet/static/brand:ro
+      - ${MEET_ROOT}/web/landing:/usr/share/jitsi-meet/static/landing:ro
+      - ${MEET_ROOT}/web/nginx-custom:/config/nginx-custom:ro
+
+  prosody:
+    volumes:
+      - ${MEET_ROOT}/prosody/plugins:/prosody-plugins-custom:ro
+      - ${MEET_ROOT}/prosody/conf.d/meet.cfg.lua:/config/conf.d/meet.cfg.lua:ro
+      - ${MEET_ROOT}/prosody/conf.d/meet-events.cfg.lua:/config/conf.d/meet-events.cfg.lua:ro
+    environment:
+      - XMPP_DOMAIN
+      - XMPP_MUC_DOMAIN
+      - MEET_EVENTS
+      - MEET_APP_API_URL
+      - MEET_APP_API_TOKEN
+      - MEET_APP_CONTROL_KEYS_URL
+      - MEET_TEXT_REMOVED
+      - MEET_TEXT_PRIVATE_CHAT_ONLY
+      - MEET_TEXT_PUBLIC_CHAT_OFF
+      - MEET_TEXT_SEAT_REPLACED
+    ports:
+      - "${MEET_CONTROL_BIND:-127.0.0.1}:${MEET_CONTROL_PORT:-5280}:5280"

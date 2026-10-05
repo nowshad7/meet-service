@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/join-token.schema.json",
+  "title": "Join token claims (RS256 JWT payload, header carries kid)",
+  "type": "object",
+  "required": [
+    "iss",
+    "aud",
+    "sub",
+    "room",
+    "nbf",
+    "exp",
+    "context"
+  ],
+  "properties": {
+    "iss": {
+      "type": "string",
+      "description": "Must equal the deployment's JWT_APP_ID"
+    },
+    "aud": {
+      "type": "string"
+    },
+    "sub": {
+      "type": "string",
+      "description": "Tenant; the first URL path segment of the room, or the deployment domain for rooms without a tenant"
+    },
+    "room": {
+      "type": "string",
+      "description": "Room name, or * for any room"
+    },
+    "nbf": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "exp": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "jti": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "user"
+      ],
+      "properties": {
+        "user": {
+          "type": "object",
+          "required": [
+            "id",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable app user id; the attendance and single-session key"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "email": {
+              "type": "string"
+            },
+            "avatar": {
+              "type": "string"
+            },
+            "moderator": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "true or \"true\" makes the user a moderator"
+            },
+            "affiliation": {
+              "enum": [
+                "owner",
+                "moderator",
+                "teacher",
+                "member"
+              ]
+            },
+            "lobby_bypass": {
+              "type": "boolean"
+            }
+          }
+        },
+        "group": {
+          "type": "string"
+        },
+        "features": {
+          "type": "object",
+          "properties": {
+            "recording": {
+              "type": "boolean"
+            },
+            "screen-sharing": {
+              "type": "boolean"
+            },
+            "transcription": {
+              "type": "boolean"
+            },
+            "livestreaming": {
+              "type": "boolean"
+            },
+            "outbound-call": {
+              "type": "boolean"
+            }
+          }
+        },
+        "room": {
+          "type": "object",
+          "properties": {
+            "privacy": {
+              "type": "boolean"
+            },
+            "publicChat": {
+              "type": "boolean"
+            },
+            "lobby_autostart": {
+              "type": "boolean"
+            },
+            "transcription": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "language": {
+                  "type": "string"
+                },
+                "autoStart": {
+                  "type": "boolean"
+                },
+                "save": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
