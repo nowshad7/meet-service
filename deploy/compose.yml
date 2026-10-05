@@ -1,0 +1,107 @@
+x-service: &service
+  restart: ${RESTART_POLICY:-unless-stopped}
+  read_only: true
+  tmpfs:
+    - /run:size=16M,mode=1750,exec
+    - /tmp:size=16M,mode=1777,noexec
+  env_file:
+    - .env
+    - secrets.env
+  networks:
+    meet.jitsi:
+
+services:
+  web:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-web:${MEET_VERSION:?set MEET_VERSION in .env}
+    env_file:
+      - .env
+    ports:
+      - "${HTTP_PORT:-80}:8000"
+      - "${HTTPS_PORT:-443}:8443"
+    volumes:
+      - ${CONFIG:-./data}/web:/config:Z
+      - ${CONFIG:-./data}/storage/web:/storage:Z
+      - ${CONFIG:-./data}/storage/transcripts:/usr/share/jitsi-meet/transcripts:ro,z
+      - ${CONFIG:-./data}/tmp/web-load-test:/usr/share/jitsi-meet/load-test:Z
+      - ./brand:/meet/brand:ro
+    depends_on:
+      - jvb
+
+  prosody:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-prosody:${MEET_VERSION:?set MEET_VERSION in .env}
+    expose:
+      - "5222"
+      - "5269"
+      - "5347"
+      - "5280"
+    ports:
+      - "${MEET_CONTROL_BIND:-127.0.0.1}:${MEET_CONTROL_PORT:-5280}:5280"
+    volumes:
+      - ${CONFIG:-./data}/prosody/config:/config:Z
+      - ${CONFIG:-./data}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+      - ${CONFIG:-./data}/storage/prosody:/var/lib/prosody:Z
+    networks:
+      meet.jitsi:
+        aliases:
+          - ${XMPP_SERVER:-xmpp.meet.jitsi}
+
+  jicofo:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jicofo:${MEET_VERSION:?set MEET_VERSION in .env}
+    environment:
+      - SENTRY_DSN=${JICOFO_SENTRY_DSN:-0}
+    ports:
+      - "127.0.0.1:${JICOFO_REST_PORT:-8888}:8888"
+    volumes:
+      - ${CONFIG:-./data}/jicofo:/config:Z
+    depends_on:
+      - prosody
+
+  jvb:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jvb:${MEET_VERSION:?set MEET_VERSION in .env}
+    environment:
+      - SENTRY_DSN=${JVB_SENTRY_DSN:-0}
+    ports:
+      - "${JVB_PORT:-10000}:${JVB_PORT:-10000}/udp"
+      - "127.0.0.1:${JVB_COLIBRI_PORT:-8080}:8080"
+    volumes:
+      - ${CONFIG:-./data}/jvb:/config:Z
+    depends_on:
+      - prosody
+
+  jibri:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jibri:${MEET_VERSION:?set MEET_VERSION in .env}
+    profiles:
+      - recording
+    tmpfs:
+      - /run:size=256M,mode=1750,exec
+      - /tmp:size=256M,mode=1777,noexec
+    shm_size: 2gb
+    environment:
+      - DISPLAY=:0
+    volumes:
+      - ${CONFIG:-./data}/jibri:/config:Z
+      - ${CONFIG:-./data}/storage/jibri:/storage:Z
+    depends_on:
+      - jicofo
+
+  app-proxy:
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-app-proxy:${MEET_VERSION:?set MEET_VERSION in .env}
+    profiles:
+      - app-proxy
+    restart: ${RESTART_POLICY:-unless-stopped}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - MEET_APP_PROXY_HOST
+    networks:
+      meet.jitsi:
+        aliases:
+          - ${MEET_APP_PROXY_ALIAS:-app.internal}
+
+networks:
+  meet.jitsi:

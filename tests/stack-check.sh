@@ -3,20 +3,51 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEET="$ROOT/scripts/meet"
-DEPLOYMENT="${1:?usage: tests/stack-check.sh <deployment>}"
+USAGE="usage: tests/stack-check.sh <deployment> | --dir <image deployment folder>"
 failed=0
+
+if [[ "${1:-}" == --dir ]]; then
+  DIR="${2:?$USAGE}"
+  stack() {
+    docker compose --project-directory "$DIR" "$@"
+  }
+  plugins_setting() {
+    sed -n 's/^MEET_PLUGINS=//p' "$DIR/.env"
+  }
+else
+  DEPLOYMENT="${1:?$USAGE}"
+  stack() {
+    "$MEET" compose "$DEPLOYMENT" "$@"
+  }
+  plugins_setting() {
+    "$MEET" env "$DEPLOYMENT" | sed -n 's/^MEET_PLUGINS=//p'
+  }
+fi
 
 fail() {
   echo "FAIL: $*"
   failed=1
 }
 
-setting() {
-  "$MEET" env "$DEPLOYMENT" | sed -n "s/^$1=//p"
+prosody() {
+  stack exec -T prosody "$@"
 }
 
-prosody() {
-  "$MEET" compose "$DEPLOYMENT" exec -T prosody "$@"
+check_endpoint() {
+  if stack exec -T "$1" curl -fsS -o /dev/null "http://127.0.0.1:$2"; then
+    echo "ok: $1 healthy"
+  else
+    fail "$1 is not healthy ($2)"
+  fi
+}
+
+check_bridge_registered() {
+  if stack exec -T jicofo sh -c \
+    'curl -fsS http://127.0.0.1:8888/stats | jq -e ".bridge_selector.operational_bridge_count >= 1"' >/dev/null 2>&1; then
+    echo "ok: jicofo has an operational bridge"
+  else
+    fail "jicofo has no operational videobridge"
+  fi
 }
 
 loaded_modules() {
@@ -38,13 +69,16 @@ expect_module() {
   fi
 }
 
-"$MEET" health "$DEPLOYMENT" || fail "deployment is not healthy"
+stack ps
+check_endpoint prosody 5280/health
+check_endpoint jvb 8080/about/health
+check_bridge_registered
 
 domain="$(prosody printenv XMPP_DOMAIN || true)"
 domain="${domain:-meet.jitsi}"
 muc="$(prosody printenv XMPP_MUC_DOMAIN || true)"
 muc="${muc:-muc.$domain}"
-plugins=",$(setting MEET_PLUGINS),"
+plugins=",$(plugins_setting),"
 
 [[ "$plugins" == *,events,* ]] && expect_module "events.$domain" meet_events
 [[ "$plugins" == *,control,* ]] && expect_module "$domain" meet_control
@@ -52,7 +86,7 @@ plugins=",$(setting MEET_PLUGINS),"
 [[ "$plugins" == *,privacy,* ]] && expect_module "$muc" meet_privacy
 [[ "$plugins" == *,single-session,* ]] && expect_module "$muc" meet_single_session
 
-if "$MEET" logs "$DEPLOYMENT" prosody 2>&1 | grep -E 'mod_meet_|meet_(events|control|privacy|single_session)' | grep -iE 'error|failed'; then
+if stack logs prosody 2>&1 | grep -E 'mod_meet_|meet_(events|control|privacy|single_session)' | grep -iE 'error|failed'; then
   fail "prosody logged errors for mod_meet_* modules"
 fi
 

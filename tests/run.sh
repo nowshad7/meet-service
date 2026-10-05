@@ -14,6 +14,16 @@ run_tool() {
   fi
 }
 
+check_deploy_compose() {
+  local dir
+  dir="$(mktemp -d)"
+  cp -R deploy/. "$dir"
+  cp "$dir/env.example" "$dir/.env"
+  cp "$dir/secrets.env.example" "$dir/secrets.env"
+  COMPOSE_PROFILES=recording,app-proxy docker compose --project-directory "$dir" config --quiet
+  rm -rf "$dir"
+}
+
 step() {
   echo "== $*"
 }
@@ -26,6 +36,7 @@ run_tool busted ghcr.io/lunarmodules/busted:v2.3.0 --output=utfTerminal tests/pl
 
 step shellcheck
 run_tool shellcheck koalaman/shellcheck:v0.11.0 -x scripts/meet services/recording-finalize/finalize.sh tests/*.sh
+run_tool shellcheck koalaman/shellcheck:v0.11.0 --shell=bash images/s6/scripts/meet-defaults
 
 step recording finalize
 tests/finalize-test.sh
@@ -44,5 +55,11 @@ tests/contract-check.py "$samples"
 
 step prosody config fragments
 tests/prosody-config-check.sh
+
+step image definitions
+UPSTREAM_VERSION="$(<UPSTREAM_VERSION)" docker buildx bake --check
+
+step deploy compose
+check_deploy_compose
 
 echo "all checks passed"
