@@ -1,0 +1,10 @@
+html body,
+input,
+textarea {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.videocontainer.active-speaker .videocontainer__background,
+#largeVideoContainer.active-speaker {
+  box-shadow: inset 0 0 0 2px #3D7BF7;
+}

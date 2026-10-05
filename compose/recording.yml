@@ -1,0 +1,7 @@
+services:
+  jibri:
+    volumes:
+      - ${MEET_ROOT}/services/recording-finalize/finalize.sh:/usr/local/bin/meet-finalize.sh:ro
+    environment:
+      - MEET_APP_API_URL
+      - MEET_APP_API_TOKEN

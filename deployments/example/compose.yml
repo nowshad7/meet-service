@@ -1,0 +1,16 @@
+services:
+  app:
+    image: node:22-alpine
+    restart: ${RESTART_POLICY:-unless-stopped}
+    command: ["node", "/app/server.mjs"]
+    volumes:
+      - ${MEET_ROOT}/examples/app-node:/app:ro
+    environment:
+      - PUBLIC_URL
+      - JWT_APP_ID
+      - MEET_APP_API_TOKEN
+      - MEET_CONTROL_URL=http://prosody:5280
+    ports:
+      - "127.0.0.1:${EXAMPLE_APP_PORT:-3000}:3000"
+    networks:
+      meet.jitsi:

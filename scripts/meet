@@ -1,0 +1,424 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+UPSTREAM_REPO="${MEET_UPSTREAM_REPO:-https://github.com/jitsi/docker-jitsi-meet.git}"
+UPSTREAM_VERSION="$(<"$ROOT/UPSTREAM_VERSION")"
+DEPLOYMENTS_DIR="${MEET_DEPLOYMENTS_DIR:-$ROOT/deployments}"
+[[ "$DEPLOYMENTS_DIR" == /* ]] || DEPLOYMENTS_DIR="$PWD/$DEPLOYMENTS_DIR"
+KNOWN_FEATURES="recording app-proxy"
+KNOWN_PLUGINS="events room-gate control single-session privacy"
+GENERATED_SECRET_BYTES=24
+UPGRADE_WATCHED_MODULES="token_verification room_metadata_component muc_meeting_id reservations"
+
+usage() {
+  cat <<EOF
+usage: scripts/meet <command> [args]
+
+  new-deployment <name>   create <deployments>/<name>/ from deployments/_template/
+  init <name>             fetch upstream, fill empty secrets once, create the data tree
+  up <name> [svc...]      start the deployment
+  down <name>             stop the deployment (volumes are never removed)
+  health <name>           container state, Prosody and JVB health, operational bridge in Jicofo
+  logs <name> [args...]   docker compose logs for the deployment
+  env <name>              print the derived settings and compose files (no secrets)
+  compose <name> [args]   any other docker compose command for the deployment
+  upgrade-check           list upstream stable releases newer than UPSTREAM_VERSION
+  upgrade <tag>           report what changes upstream from UPSTREAM_VERSION to <tag>, then pin <tag>
+
+<deployments> is \$MEET_DEPLOYMENTS_DIR, default ./deployments in this repository.
+EOF
+}
+
+die() {
+  echo "meet: $*" >&2
+  exit 1
+}
+
+deployment_dir() {
+  local name="${1:-}"
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "deployment name must match [a-z0-9][a-z0-9-]*, got '$name'"
+  echo "$DEPLOYMENTS_DIR/$name"
+}
+
+existing_deployment_dir() {
+  local dir
+  dir="$(deployment_dir "${1:-}")"
+  [[ -f "$dir/deployment.env" ]] || die "no deployment '$1' (missing $dir/deployment.env)"
+  echo "$dir"
+}
+
+upstream_dir() {
+  echo "$ROOT/.upstream/${1:-$UPSTREAM_VERSION}"
+}
+
+fetch_upstream() {
+  local version="${1:-$UPSTREAM_VERSION}" dir
+  dir="$(upstream_dir "$version")"
+  [[ -f "$dir/docker-compose.yml" ]] && return
+  mkdir -p "$ROOT/.upstream"
+  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$version" "$UPSTREAM_REPO" "$dir"
+  echo "fetched docker-jitsi-meet $version into ${dir#"$ROOT"/}"
+}
+
+has_item() {
+  [[ ",${1// /}," == *",$2,"* ]]
+}
+
+append_csv() {
+  local current="$1" item="$2"
+  echo "${current:+$current,}$item"
+}
+
+validate_items() {
+  local kind="$1" known="$2" list="$3" item
+  for item in ${list//,/ }; do
+    [[ " $known " == *" $item "* ]] || die "unknown $kind '$item' (known: $known)"
+  done
+}
+
+require_settings() {
+  local name
+  for name in "$@"; do
+    [[ -n "${!name:-}" ]] || die "$name must be set for this deployment"
+  done
+}
+
+load_deployment() {
+  DEPLOYMENT="$1"
+  MEET_DEPLOYMENT_DIR="$(existing_deployment_dir "$DEPLOYMENT")"
+  local secrets="$MEET_DEPLOYMENT_DIR/secrets.env"
+  [[ -f "$secrets" ]] || die "missing ${secrets#"$ROOT"/}; run: scripts/meet init $DEPLOYMENT"
+
+  set -a
+  # shellcheck disable=SC1091
+  source "$MEET_DEPLOYMENT_DIR/deployment.env"
+  # shellcheck disable=SC1090
+  source "$secrets"
+  set +a
+
+  MEET_FEATURES="${MEET_FEATURES:-}"
+  MEET_PLUGINS="${MEET_PLUGINS:-}"
+  validate_items feature "$KNOWN_FEATURES" "$MEET_FEATURES"
+  validate_items plugin "$KNOWN_PLUGINS" "$MEET_PLUGINS"
+
+  export MEET_ROOT="$ROOT" MEET_DEPLOYMENT_DIR
+  export CONFIG="${CONFIG:-$ROOT/.data/$DEPLOYMENT}"
+  export MEET_BRAND_DIR="$CONFIG/meet/brand"
+  export JITSI_IMAGE_VERSION="$UPSTREAM_VERSION"
+  export JICOFO_ENABLE_REST=1
+  export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-meet-$DEPLOYMENT}"
+
+  derive_plugin_settings
+  derive_feature_settings
+}
+
+derive_plugin_settings() {
+  export MEET_EVENTS=0
+  if has_item "$MEET_PLUGINS" events; then
+    require_settings MEET_APP_API_URL MEET_APP_API_TOKEN
+    MEET_EVENTS=1
+  fi
+
+  if has_item "$MEET_PLUGINS" room-gate; then
+    require_settings MEET_APP_API_URL MEET_APP_API_TOKEN
+    export PROSODY_RESERVATION_ENABLED=1
+    export PROSODY_RESERVATION_REST_BASE_URL="$MEET_APP_API_URL"
+  fi
+
+  if has_item "$MEET_PLUGINS" control; then
+    require_settings MEET_APP_CONTROL_KEYS_URL
+    XMPP_MODULES="$(append_csv "${XMPP_MODULES:-}" muc_end_meeting)"
+    XMPP_MODULES="$(append_csv "$XMPP_MODULES" meet_control)"
+  fi
+
+  if has_item "$MEET_PLUGINS" single-session; then
+    XMPP_MUC_MODULES="$(append_csv "${XMPP_MUC_MODULES:-}" meet_single_session)"
+  fi
+
+  if has_item "$MEET_PLUGINS" privacy; then
+    XMPP_MUC_MODULES="$(append_csv "${XMPP_MUC_MODULES:-}" meet_privacy)"
+  fi
+
+  export XMPP_MODULES="${XMPP_MODULES:-}" XMPP_MUC_MODULES="${XMPP_MUC_MODULES:-}"
+
+  if [[ "${AUTH_TYPE:-}" == jwt ]]; then
+    require_settings JWT_APP_ID MEET_APP_KEYS_URL
+    export JWT_ASAP_KEYSERVER="$MEET_APP_KEYS_URL"
+    local token_settings="app_id = \"$JWT_APP_ID\",asap_key_server = \"$MEET_APP_KEYS_URL\",token_verification_allowlist = { \"${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}\" }"
+    export XMPP_MUC_CONFIGURATION="$token_settings${XMPP_MUC_CONFIGURATION:+,$XMPP_MUC_CONFIGURATION}"
+  fi
+}
+
+derive_feature_settings() {
+  if has_item "$MEET_FEATURES" recording; then
+    require_settings MEET_APP_API_URL MEET_APP_API_TOKEN
+    export ENABLE_RECORDING=1 ENABLE_SERVICE_RECORDING=1
+    export JIBRI_FINALIZE_RECORDING_SCRIPT_PATH=/usr/local/bin/meet-finalize.sh
+  fi
+
+  if has_item "$MEET_FEATURES" app-proxy; then
+    require_settings MEET_APP_PROXY_HOST
+  fi
+}
+
+compose_files() {
+  local upstream
+  upstream="$(upstream_dir)"
+  echo "--file=$upstream/docker-compose.yml"
+  has_item "$MEET_FEATURES" recording && echo "--file=$upstream/jibri.yml"
+  echo "--file=$ROOT/compose/base.yml"
+  local feature
+  for feature in ${MEET_FEATURES//,/ }; do
+    echo "--file=$ROOT/compose/$feature.yml"
+  done
+  [[ -f "$MEET_DEPLOYMENT_DIR/compose.yml" ]] && echo "--file=$MEET_DEPLOYMENT_DIR/compose.yml"
+  return 0
+}
+
+compose() {
+  local files
+  mapfile -t files < <(compose_files)
+  docker compose --project-directory "$(upstream_dir)" "${files[@]}" "$@"
+}
+
+brand_sources() {
+  echo "$ROOT/web/brand"
+  [[ -d "$MEET_DEPLOYMENT_DIR/brand" ]] && echo "$MEET_DEPLOYMENT_DIR/brand"
+  return 0
+}
+
+relative_files() {
+  (cd "$1" && find . -type f) | sort -u
+}
+
+prepare_brand() {
+  local sources source stale
+  mapfile -t sources < <(brand_sources)
+  mkdir -p "$MEET_BRAND_DIR"
+
+  stale="$(comm -23 <(relative_files "$MEET_BRAND_DIR") \
+    <(for source in "${sources[@]}"; do relative_files "$source"; done | sort -u))"
+  [[ -z "$stale" ]] || (cd "$MEET_BRAND_DIR" && xargs -d '\n' rm -f <<<"$stale")
+
+  for source in "${sources[@]}"; do
+    cp -R "$source/." "$MEET_BRAND_DIR/"
+  done
+}
+
+make_data_tree() {
+  mkdir -p "$CONFIG"/{web,transcripts,jicofo,jvb,jigasi,jibri} \
+           "$CONFIG"/prosody/{config/conf.d,prosody-plugins-custom} \
+           "$CONFIG"/storage/{web,prosody,transcripts,jibri/logs,jibri/recordings} \
+           "$CONFIG"/tmp/web-load-test \
+           "$CONFIG"/meet
+  if [[ $EUID -eq 0 ]]; then
+    chown -R 1000:1000 "$CONFIG"
+  else
+    chmod -R a+rwX "$CONFIG"
+  fi
+}
+
+fill_secrets() {
+  local dir="$1" secrets="$1/secrets.env" empty name
+  [[ -f "$secrets" ]] || { cp "$dir/secrets.env.example" "$secrets"; chmod 600 "$secrets"; }
+
+  empty="$(sed -n 's/^\([A-Z][A-Z0-9_]*\)=$/\1/p' "$secrets")"
+  if [[ -z "$empty" ]]; then
+    echo "secrets already present in ${secrets#"$ROOT"/}, left alone"
+    return
+  fi
+
+  for name in $empty; do
+    sed -i "s#^${name}=\$#${name}=$(openssl rand -hex "$GENERATED_SECRET_BYTES")#" "$secrets"
+  done
+  echo "generated ${empty//$'\n'/ } in ${secrets#"$ROOT"/}"
+}
+
+cmd_new_deployment() {
+  local dir
+  dir="$(deployment_dir "${1:-}")"
+  [[ -e "$dir" ]] && die "${dir#"$ROOT"/} already exists"
+  mkdir -p "$DEPLOYMENTS_DIR"
+  cp -R "$ROOT/deployments/_template" "$dir"
+  rm -f "$dir/brand/.gitkeep"
+  echo "created ${dir#"$ROOT"/}; fill deployment.env and brand/, then commit"
+}
+
+cmd_init() {
+  local dir
+  dir="$(existing_deployment_dir "${1:-}")"
+  fill_secrets "$dir"
+  load_deployment "$1"
+  make_data_tree
+  echo "data tree ready at $CONFIG"
+  fetch_upstream
+}
+
+cmd_up() {
+  load_deployment "${1:-}"
+  shift
+  fetch_upstream
+  prepare_brand
+  compose up -d "$@"
+  compose ps
+}
+
+cmd_down() {
+  load_deployment "${1:-}"
+  shift
+  local arg
+  for arg in "$@"; do
+    [[ "$arg" == -v || "$arg" == --volumes ]] && die "refusing 'down $arg': it deletes all Jitsi state"
+  done
+  compose down "$@"
+}
+
+check_endpoint() {
+  if compose exec -T "$1" curl -fsS -o /dev/null "http://127.0.0.1:$2"; then
+    echo "$1: OK"
+  else
+    echo "$1: not healthy ($2)"
+    return 1
+  fi
+}
+
+check_bridge_registered() {
+  if compose exec -T jicofo sh -c \
+    'curl -fsS http://127.0.0.1:8888/stats | jq -e ".bridge_selector.operational_bridge_count >= 1"' >/dev/null 2>&1; then
+    echo "jicofo: OK, a bridge is operational"
+  else
+    echo "jicofo: no operational videobridge"
+    return 1
+  fi
+}
+
+cmd_health() {
+  load_deployment "${1:-}"
+  local failed=0
+  compose ps
+  check_endpoint prosody 5280/health || failed=1
+  check_endpoint jvb 8080/about/health || failed=1
+  check_bridge_registered || failed=1
+  return "$failed"
+}
+
+cmd_logs() {
+  load_deployment "${1:-}"
+  shift
+  compose logs "$@"
+}
+
+cmd_env() {
+  load_deployment "${1:-}"
+  local name
+  for name in COMPOSE_PROJECT_NAME MEET_DEPLOYMENT_DIR CONFIG JITSI_IMAGE_VERSION MEET_FEATURES MEET_PLUGINS MEET_EVENTS \
+              XMPP_MODULES XMPP_MUC_MODULES XMPP_MUC_CONFIGURATION JWT_ASAP_KEYSERVER \
+              PROSODY_RESERVATION_ENABLED PROSODY_RESERVATION_REST_BASE_URL \
+              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST; do
+    echo "$name=${!name:-}"
+  done
+  local files
+  mapfile -t files < <(compose_files)
+  printf 'compose %s\n' "${files[@]#--file=}"
+}
+
+cmd_compose() {
+  load_deployment "${1:-}"
+  shift
+  compose "$@"
+}
+
+stable_tags() {
+  git ls-remote --tags --refs "$UPSTREAM_REPO" 'stable-*' | sed 's#.*refs/tags/##' | sort -V
+}
+
+cmd_upgrade_check() {
+  local newer tag
+  newer="$(stable_tags | awk -v pinned="$UPSTREAM_VERSION" 'found { print } $0 == pinned { found = 1 } END { exit !found }')" \
+    || die "$UPSTREAM_VERSION is not an upstream stable tag"
+  if [[ -z "$newer" ]]; then
+    echo "$UPSTREAM_VERSION is the newest stable release"
+  else
+    echo "pinned: $UPSTREAM_VERSION"
+    echo "newer stable releases:"
+    while read -r tag; do echo "  $tag"; done <<<"$newer"
+  fi
+}
+
+env_names() {
+  local dir="$1"
+  {
+    sed -n 's/^#*\s*\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$dir/env.example"
+    grep -rhoE '\.Env\.[A-Z][A-Z0-9_]*' "$dir" --include='*.lua' --include='*.conf' --include='*.js' \
+      --include='*.properties' --include='*.config' | sed 's/^\.Env\.//'
+    grep -hoE '^\s+- [A-Z][A-Z0-9_]*$' "$dir"/*.yml | sed 's/^\s*- //'
+  } | sort -u
+}
+
+prosody_module() {
+  local version="$1" module="$2" out="$3" container
+  container="$(docker create "ghcr.io/jitsi/prosody:$version")"
+  docker cp "$container:/prosody-plugins/mod_$module.lua" "$out" >/dev/null 2>&1 || : >"$out"
+  docker rm "$container" >/dev/null
+}
+
+cmd_upgrade() {
+  local target="${1:-}" old new work module
+  [[ -n "$target" ]] || die "usage: scripts/meet upgrade <tag>"
+  [[ "$target" != "$UPSTREAM_VERSION" ]] || die "already pinned to $target"
+  stable_tags | grep -xF "$target" >/dev/null || die "$target is not an upstream stable tag"
+
+  fetch_upstream "$UPSTREAM_VERSION"
+  fetch_upstream "$target"
+  old="$(upstream_dir "$UPSTREAM_VERSION")"
+  new="$(upstream_dir "$target")"
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' RETURN
+
+  echo "== env variables added in $target =="
+  comm -13 <(env_names "$old") <(env_names "$new")
+  echo "== env variables removed in $target =="
+  comm -23 <(env_names "$old") <(env_names "$new")
+
+  echo "== jicofo config =="
+  diff -u "$old/jicofo/rootfs/defaults/jicofo.conf" "$new/jicofo/rootfs/defaults/jicofo.conf" && echo "unchanged"
+
+  echo "== prosody site config =="
+  diff -u "$old/prosody/rootfs/defaults/conf.d/jitsi-meet.cfg.lua" "$new/prosody/rootfs/defaults/conf.d/jitsi-meet.cfg.lua" && echo "unchanged"
+
+  echo "== upstream prosody modules we depend on =="
+  docker pull --quiet "ghcr.io/jitsi/prosody:$UPSTREAM_VERSION" >/dev/null
+  docker pull --quiet "ghcr.io/jitsi/prosody:$target" >/dev/null
+  for module in $UPGRADE_WATCHED_MODULES; do
+    prosody_module "$UPSTREAM_VERSION" "$module" "$work/old.lua"
+    prosody_module "$target" "$module" "$work/new.lua"
+    echo "-- mod_$module"
+    diff -u --label "$UPSTREAM_VERSION" --label "$target" "$work/old.lua" "$work/new.lua" && echo "unchanged"
+  done
+
+  echo "$target" >"$ROOT/UPSTREAM_VERSION"
+  echo "== pinned UPSTREAM_VERSION to $target; run the tests and the stack check before merging =="
+}
+
+main() {
+  local command="${1:-help}"
+  shift || true
+  case "$command" in
+    new-deployment) cmd_new_deployment "$@" ;;
+    init) cmd_init "$@" ;;
+    up) cmd_up "$@" ;;
+    down) cmd_down "$@" ;;
+    health) cmd_health "$@" ;;
+    logs) cmd_logs "$@" ;;
+    env) cmd_env "$@" ;;
+    compose) cmd_compose "$@" ;;
+    upgrade-check) cmd_upgrade_check ;;
+    upgrade) cmd_upgrade "$@" ;;
+    help | -h | --help) usage ;;
+    *) usage >&2; exit 1 ;;
+  esac
+}
+
+main "$@"
