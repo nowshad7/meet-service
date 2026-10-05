@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/control-end-meeting.schema.json",
+  "title": "POST /end-meeting query on the Prosody HTTP port",
+  "type": "object",
+  "required": [
+    "conference"
+  ],
+  "properties": {
+    "conference": {
+      "type": "string"
+    },
+    "silent-reconnect": {
+      "enum": [
+        "true",
+        "false"
+      ]
+    }
+  }
+}

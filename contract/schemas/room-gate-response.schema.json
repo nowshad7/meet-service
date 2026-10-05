@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/room-gate-response.schema.json",
+  "title": "Room gate response",
+  "oneOf": [
+    {
+      "title": "Approved (200 or 201)",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "mail_owner",
+        "start_time",
+        "duration"
+      ],
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "The requested name, unchanged"
+        },
+        "mail_owner": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Seconds; the room is destroyed when it runs out"
+        },
+        "max_occupants": {
+          "type": "integer"
+        },
+        "lobby": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "title": "Conflict (409)",
+      "type": "object",
+      "required": [
+        "conflict_id"
+      ],
+      "properties": {
+        "conflict_id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Denied (4xx)",
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Shown to the user"
+        }
+      }
+    }
+  ]
+}

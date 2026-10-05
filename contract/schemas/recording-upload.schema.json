@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/recording-upload.schema.json",
+  "title": "Recording upload query: PUT {MEET_APP_API_URL}/recordings/finished, body is the video/mp4",
+  "type": "object",
+  "required": [
+    "key",
+    "meeting_url"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Recording directory name; the idempotency key"
+    },
+    "meeting_url": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "iss": "example-app",
+  "aud": "jitsi",
+  "sub": "*",
+  "room": "*",
+  "exp": 1791100860
+}

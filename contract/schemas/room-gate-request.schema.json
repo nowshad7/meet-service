@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/room-gate-request.schema.json",
+  "title": "Room gate request: POST {MEET_APP_API_URL}/conference, form-encoded",
+  "type": "object",
+  "required": [
+    "name",
+    "start_time",
+    "mail_owner"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Room name; [tenant]room for tenant URLs"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+    },
+    "mail_owner": {
+      "type": "string",
+      "description": "Bare JID of the creator"
+    }
+  }
+}

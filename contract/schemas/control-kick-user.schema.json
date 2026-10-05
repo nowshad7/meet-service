@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/control-kick-user.schema.json",
+  "title": "POST /kick-user and POST /allow-user query on the Prosody HTTP port",
+  "type": "object",
+  "required": [
+    "conference",
+    "user"
+  ],
+  "properties": {
+    "conference": {
+      "type": "string",
+      "description": "Room JID, e.g. room@muc.meet.jitsi"
+    },
+    "user": {
+      "type": "string",
+      "description": "context.user.id"
+    },
+    "ban": {
+      "enum": [
+        "true",
+        "false"
+      ],
+      "description": "kick-user only; anything but false keeps the user out until the room ends or allow-user"
+    }
+  }
+}

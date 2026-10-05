@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/control-token.schema.json",
+  "title": "Control token claims (RS256 JWT payload signed with the control key)",
+  "type": "object",
+  "required": [
+    "iss",
+    "sub",
+    "room",
+    "exp"
+  ],
+  "properties": {
+    "iss": {
+      "type": "string",
+      "description": "Must equal the deployment's JWT_APP_ID"
+    },
+    "aud": {
+      "type": "string"
+    },
+    "sub": {
+      "type": "string"
+    },
+    "room": {
+      "type": "string"
+    },
+    "nbf": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "exp": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    }
+  }
+}
