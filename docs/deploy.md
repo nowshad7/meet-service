@@ -1,0 +1,207 @@
+# Deploying
+
+Every deployment is one folder of settings and the same `scripts/meet` commands, on a laptop and in production alike.
+Requirements on the host: Linux with Docker and Compose v2, git, openssl and bash.
+
+## Try it on localhost
+
+`deployments/example/` runs on `https://localhost:8443` together with the [reference app](../examples/app-node/README.md) on `http://localhost:3000`.
+The [README quick start](../README.md#quick-start-5-minutes-localhost) walks through it.
+
+The example sets `JVB_ADVERTISE_IPS=127.0.0.1`, so only browsers on the same machine get media.
+To test from another device on your network, add the host's LAN address, for example `JVB_ADVERTISE_IPS=127.0.0.1,192.168.1.20`, and open `https://192.168.1.20:8443` there after changing `PUBLIC_URL` to match.
+
+## A new deployment
+
+1. Create the folder from the template:
+
+   ```bash
+   scripts/meet new-deployment acme
+   $EDITOR deployments/acme/deployment.env
+   ```
+
+   Start from [deployments/example-production/deployment.env](../deployments/example-production/deployment.env) for a public server with a domain and Let's Encrypt.
+   Put branding in `deployments/acme/brand/` (see [Branding and wording](#branding-and-wording)).
+2. On the server, clone this repository at a release tag, bring your deployment folder along and run:
+
+   ```bash
+   scripts/meet init acme      # fills empty secrets once, creates .data/acme, fetches upstream
+   scripts/meet up acme
+   scripts/meet health acme
+   tests/stack-check.sh acme
+   ```
+
+3. Give the app team the values from [the contract](../contract/README.md#settings-agreed-per-deployment), including `MEET_APP_API_TOKEN` from `deployments/acme/secrets.env`.
+
+### Keeping deployments outside this repository
+
+Only `deployments/_template/` and the shipped examples are tracked; everything else under `deployments/` is gitignored.
+To version your real deployments, keep them in a private repository or folder and point `MEET_DEPLOYMENTS_DIR` at it:
+
+```bash
+export MEET_DEPLOYMENTS_DIR=/srv/meet-deployments   # a private git repository, for example
+scripts/meet new-deployment acme                    # creates /srv/meet-deployments/acme
+scripts/meet up acme
+```
+
+A relative `MEET_DEPLOYMENTS_DIR` is resolved from the current directory.
+The default is `deployments/` in this repository.
+Every command reads the deployment from that folder, including its `compose.yml`, `brand/` and `secrets.env`; keep `secrets.env` out of git there too.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `scripts/meet new-deployment <name>` | Copies `deployments/_template/` to `<deployments>/<name>/` |
+| `scripts/meet init <name>` | Creates `secrets.env` from `secrets.env.example`, fills only empty values, creates the data tree, fetches upstream |
+| `scripts/meet up <name> [service...]` | Builds the brand directory and starts the deployment; extra arguments go to `docker compose up -d` |
+| `scripts/meet down <name>` | Stops it; `-v` is refused because it deletes all Jitsi state |
+| `scripts/meet health <name>` | Container state, Prosody and JVB health, an operational bridge in Jicofo |
+| `scripts/meet logs <name> [args]` | `docker compose logs` for the deployment, e.g. `logs acme -f prosody` |
+| `scripts/meet env <name>` | Prints the derived upstream settings and compose files, never secrets |
+| `scripts/meet compose <name> [args]` | Any other `docker compose` command, e.g. `compose acme restart web` |
+| `scripts/meet upgrade-check`, `upgrade <tag>` | See [upgrade.md](upgrade.md) |
+
+The compose project is `meet-<name>`.
+Runtime data goes to `.data/<name>/` unless `CONFIG` is set in `deployment.env`.
+As root, `init` hands the data tree to uid 1000, the user the images run as; as any other user it makes the tree world-writable, which is only acceptable on a development machine.
+
+## Settings
+
+`deployment.env` holds everything except secrets.
+It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/devops-guide/devops-guide-docker) (ports, `PUBLIC_URL`, `ENABLE_*`, `TOOLBAR_BUTTONS`, ...) plus these:
+
+| Setting | Meaning |
+|---|---|
+| `MEET_FEATURES` | Optional containers: `recording`, `app-proxy` |
+| `MEET_PLUGINS` | `events`, `room-gate`, `control`, `single-session`, `privacy` |
+| `MEET_APP_API_URL` | Base URL of the app's endpoints (room gate, webhooks, recordings) |
+| `MEET_APP_KEYS_URL` | Join-token public keys; becomes `JWT_ASAP_KEYSERVER` and the MUC `asap_key_server` |
+| `MEET_APP_CONTROL_KEYS_URL` | Control-token public keys, for `control` |
+| `MEET_APP_PROXY_HOST`, `MEET_APP_PROXY_ALIAS` | For `app-proxy`: the host name of the app on the docker host, and the name Prosody uses for it (default `app.internal`) |
+| `MEET_CONTROL_BIND`, `MEET_CONTROL_PORT` | Where Prosody's HTTP port is published for control calls (default `127.0.0.1:5280`) |
+| `MEET_TEXT_REMOVED`, `MEET_TEXT_PRIVATE_CHAT_ONLY`, `MEET_TEXT_PUBLIC_CHAT_OFF`, `MEET_TEXT_SEAT_REPLACED` | Optional wording for the notices users see; the defaults say "meeting" and "moderators" |
+| `XMPP_MODULES`, `XMPP_MUC_MODULES` | Upstream modules to load; `scripts/meet` appends the plugins according to `MEET_PLUGINS` |
+
+Do not set `JWT_ASAP_KEYSERVER`, `PROSODY_RESERVATION_*`, `ENABLE_RECORDING`, `JIBRI_FINALIZE_RECORDING_SCRIPT_PATH` or `JICOFO_ENABLE_REST`: `scripts/meet` derives them from the settings above.
+`scripts/meet env <name>` shows the result.
+
+`secrets.env` lives only on the server and is gitignored.
+`secrets.env.example` lists the names: the XMPP component passwords and `MEET_APP_API_TOKEN`.
+`init` generates any that are empty and never overwrites a value; regenerating XMPP passwords on a live stack would desync Prosody from Jicofo and JVB.
+
+## TLS
+
+HTTPS is the only working entry point: Jitsi builds its WebSocket URL from `PUBLIC_URL`, and browsers only grant camera and microphone on secure origins.
+
+**Let's Encrypt.**
+Point the domain's DNS at the server, open port 80 and set:
+
+```bash
+PUBLIC_URL=https://meet.example.org
+HTTP_PORT=80
+HTTPS_PORT=443
+ENABLE_LETSENCRYPT=1
+LETSENCRYPT_DOMAIN=meet.example.org
+LETSENCRYPT_EMAIL=ops@example.org
+LETSENCRYPT_ACME_SERVER=letsencrypt
+ENABLE_HTTP_REDIRECT=1
+```
+
+The web container requests and renews the certificate itself.
+Without `LETSENCRYPT_ACME_SERVER=letsencrypt`, upstream's acme.sh uses its own default certificate authority.
+Use `LETSENCRYPT_USE_STAGING=1` while you test, to stay clear of rate limits.
+
+**Your own certificate.**
+Leave `ENABLE_LETSENCRYPT=0`, copy the full chain and key into `<CONFIG>/web/keys/` (default `.data/<name>/web/keys/`) and restart the web container:
+
+```bash
+mkdir -p .data/acme/web/keys
+cp fullchain.pem .data/acme/web/keys/cert.crt
+cp privkey.pem   .data/acme/web/keys/cert.key
+scripts/meet compose acme restart web
+```
+
+Repeat that whenever the certificate is renewed.
+
+**Behind a reverse proxy or load balancer** that terminates TLS, forward to `HTTPS_PORT` (or set `DISABLE_HTTPS=1` and forward to `HTTP_PORT`), keep `PUBLIC_URL` on the public `https://` address and pass WebSocket upgrades through.
+
+## Firewall
+
+| Port | Protocol | Open to | Purpose |
+|---|---|---|---|
+| `HTTPS_PORT` (443) | TCP | Everyone | Web app, signalling over WebSocket |
+| `HTTP_PORT` (80) | TCP | Everyone | Redirect to HTTPS and Let's Encrypt challenges |
+| `JVB_PORT` (10000) | UDP | Everyone | Audio and video |
+| `MEET_CONTROL_PORT` (5280) | TCP | The app servers only | Control calls; see below |
+
+Everything else stays closed: Prosody's 5222, 5269 and 5347, Jicofo's REST port (`JICOFO_REST_PORT`, loopback), JVB's private port (`JVB_COLIBRI_PORT`, loopback) and Jibri's API.
+On a cloud host, set `JVB_ADVERTISE_IPS` to the public address; behind NAT, list both the public and the private address.
+
+## Control port for an app on another host
+
+Control calls (`/kick-user`, `/allow-user`, `/end-meeting`) go to Prosody's HTTP port, which listens on `127.0.0.1:5280` by default.
+That is enough when the app runs on the same host.
+When it runs elsewhere, pick one:
+
+1. **Private network (simplest).**
+   Bind the port to the server's private address, `MEET_CONTROL_BIND=10.0.0.5`, and allow only the app servers to reach it in the firewall.
+2. **TLS reverse proxy.**
+   Keep the loopback bind and publish a separate HTTPS virtual host (nginx, Caddy, a load balancer) that forwards only `POST /kick-user`, `/allow-user` and `/end-meeting` to `127.0.0.1:5280`, restricted to the app's addresses.
+3. **Tunnel.**
+   Reach the loopback port through WireGuard, an SSH tunnel or your cloud's private link.
+
+Never publish 5280 to the internet: the control token protects the calls, but Prosody's HTTP port serves more than these routes.
+
+## Branding and wording
+
+`web/brand/` is the default brand: `branding.json` (Jitsi dynamic branding palette and logo), `brand.css`, `logo.svg`, `custom-interface_config.js` (app name and display names), `plugin.head.html` (included at the end of every page's `<head>`) and `close.html` (shown when a meeting ends).
+`scripts/meet up` copies it to `.data/<name>/meet/brand/` and then copies `<deployment>/brand/` over it, so a deployment replaces or adds files by name.
+Everything in the result is served at `/static/brand/`.
+After changing a brand file, run `scripts/meet up <name>`: static files update in place, and `custom-interface_config.js` also needs `scripts/meet compose <name> restart web`.
+
+An LMS deployment, for example, could ship:
+
+```text
+deployments/campus/
+  deployment.env        MEET_TEXT_* below
+  brand/
+    logo.svg            replaces the default logo
+    branding.json       its own palette
+    custom-interface_config.js   APP_NAME = 'Campus Live'
+    close.html          "Class ended. You can close this tab."
+  lang/main.json        its own English strings
+  compose.yml           mounts lang/main.json
+```
+
+The notices the plugins send are plain settings:
+
+```bash
+MEET_TEXT_REMOVED="An instructor removed you from this class."
+MEET_TEXT_PRIVATE_CHAT_ONLY="In this class, messages go to the instructor and TAs only."
+MEET_TEXT_PUBLIC_CHAT_OFF="Class chat is off for learners. Send a private message instead."
+MEET_TEXT_SEAT_REPLACED="You joined this class from another tab or device."
+```
+
+To change Jitsi's own interface strings, copy `lang/main.json` from the `ghcr.io/jitsi/web` image of the pinned release, edit it, keep it in the deployment and mount it with a deployment `compose.yml`:
+
+```bash
+docker run --rm --entrypoint cat ghcr.io/jitsi/web:$(cat UPSTREAM_VERSION) \
+  /usr/share/jitsi-meet/lang/main.json > deployments/campus/lang/main.json
+```
+
+```yaml
+services:
+  web:
+    volumes:
+      - ${MEET_DEPLOYMENT_DIR}/lang/main.json:/usr/share/jitsi-meet/lang/main.json:ro
+```
+
+`scripts/meet` passes a deployment's `compose.yml` last, so it can add or override anything a brand file cannot express; `${MEET_DEPLOYMENT_DIR}` points at the deployment folder and `${MEET_ROOT}` at this repository.
+Regenerate a copied `main.json` on every Jitsi upgrade (see [upgrade.md](upgrade.md)).
+
+## Development notes
+
+- Keep `ENABLE_P2P=0` so two-person calls exercise the bridge like production does.
+- On a host without internet access set `JVB_DISABLE_STUN=1` and list the host addresses in `JVB_ADVERTISE_IPS`.
+- Set `ENABLE_HSTS=0` while you use a self-signed certificate, or browsers remember to refuse it.
