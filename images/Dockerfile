@@ -11,6 +11,8 @@ COPY prosody/conf.d/ /meet/defaults/config/conf.d/
 FROM ghcr.io/jitsi/web:${UPSTREAM_VERSION} AS web
 ENV MEET_RUN_CONFIG=/run/web/config
 COPY images/s6/ /etc/s6-overlay/
+COPY web/s6/ /etc/s6-overlay/
+COPY web/meet-transcription.js /defaults/meet-transcription.js
 COPY web/custom-config.js /meet/defaults/config/
 COPY web/nginx-custom/ /meet/defaults/config/nginx-custom/
 COPY web/brand/ /meet/defaults/brand/
@@ -22,6 +24,8 @@ USER s6
 
 FROM ghcr.io/jitsi/jicofo:${UPSTREAM_VERSION} AS jicofo
 ENV JICOFO_ENABLE_REST=1
+COPY jicofo/s6/ /etc/s6-overlay/
+COPY jicofo/meet-transcription.conf /defaults/meet-transcription.conf
 
 FROM ghcr.io/jitsi/jvb:${UPSTREAM_VERSION} AS jvb
 

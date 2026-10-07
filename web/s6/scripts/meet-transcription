@@ -1,0 +1,6 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+if [[ "${MEET_TRANSCRIPTION:-0}" == 1 && -n "${MEET_TRANSCRIBER_URL:-}" ]]; then
+  tpl /defaults/meet-transcription.js >> /run/web/config/config.js
+fi

@@ -83,10 +83,11 @@ plugins=",$(plugins_setting),"
 [[ "$plugins" == *,events,* ]] && expect_module "events.$domain" meet_events
 [[ "$plugins" == *,control,* ]] && expect_module "$domain" meet_control
 [[ "$plugins" == *,room-gate,* ]] && expect_module "$domain" reservations
+[[ "$plugins" == *,transcription,* ]] && expect_module "$muc" meet_transcription
 [[ "$plugins" == *,privacy,* ]] && expect_module "$muc" meet_privacy
 [[ "$plugins" == *,single-session,* ]] && expect_module "$muc" meet_single_session
 
-if stack logs prosody 2>&1 | grep -E 'mod_meet_|meet_(events|control|privacy|single_session)' | grep -iE 'error|failed'; then
+if stack logs prosody 2>&1 | grep -E 'mod_meet_|meet_(events|control|privacy|single_session|transcription)' | grep -iE 'error|failed'; then
   fail "prosody logged errors for mod_meet_* modules"
 fi
 

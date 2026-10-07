@@ -40,6 +40,7 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
   Attendance webhooks, single-session and removal all key on it, so set it on every token, guests included.
 - Optional user claims: `email`, `avatar`, `moderator`, `affiliation` (`owner`, `moderator` or `teacher` make a moderator), `lobby_bypass`.
 - Optional `context.group` and `context.features.*` (`recording`, `screen-sharing`, `transcription`, `livestreaming`, `outbound-call`).
+  `transcription` permits live captions when the deployment enables the `transcription` feature and plugin (see [transcription](../docs/features/transcription.md) for the upstream release gate).
 - Optional room block `context.room`:
 
 | Field | Effect | Needs plugin |
@@ -47,11 +48,15 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
 | `privacy: true` | Participants stay muted until a moderator approves them; they cannot post to the group chat and may send private messages to moderators only | `privacy` |
 | `publicChat: false` | Participants cannot post to the group chat; private messages stay open | `privacy` |
 | `lobby_autostart: false` | The lobby does not switch on automatically for this room | upstream `token_lobby_autostart` |
-| `transcription` | `{enabled, language, autoStart, save}` for live captions | captions (not yet available) |
+| `transcription` | `{enabled, language, autoStart, save}` for live captions | `transcription` |
 
 Room options come from the first token that carries them; later tokens do not change a room that is already set.
 Anything missing falls back to the deployment default.
 A room option can only turn on a feature the deployment has enabled; it can never enable a disabled one.
+For transcription, both `context.features.transcription: true` and `context.room.transcription.enabled: true` are required.
+`language` is passed to the transcriber; `autoStart: true` requests captions immediately, otherwise the caption UI starts them.
+`save` remains reserved for Phase 2 and has no effect.
+End-to-end captions require a future supporting Jitsi stable release; they were not run end to end on the pinned release.
 
 Keep `exp` generous (for example the scheduled end plus 30 minutes): Jitsi reuses the original token when a client reconnects, so a short-lived token drops users after a network blip.
 

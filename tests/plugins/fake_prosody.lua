@@ -200,6 +200,7 @@ function fake.new(options)
         end
         return value
     end
+    module.fire_event = fire
     module.get_option_string = module.get_option
     module.get_option_number = module.get_option
     module.get_option_boolean = module.get_option

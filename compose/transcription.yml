@@ -1,0 +1,21 @@
+services:
+  jicofo:
+    volumes:
+      - ${MEET_ROOT}/jicofo/meet-transcription.conf:/defaults/meet-transcription.conf:ro
+      - ${MEET_ROOT}/jicofo/s6/scripts/meet-transcription:/etc/s6-overlay/scripts/meet-transcription:ro
+      - ${MEET_ROOT}/jicofo/s6/s6-rc.d/meet-transcription:/etc/s6-overlay/s6-rc.d/meet-transcription:ro
+      - ${MEET_ROOT}/jicofo/s6/s6-rc.d/jicofo/dependencies.d/meet-transcription:/etc/s6-overlay/s6-rc.d/jicofo/dependencies.d/meet-transcription:ro
+      - ${MEET_ROOT}/jicofo/s6/s6-rc.d/user/contents.d/meet-transcription:/etc/s6-overlay/s6-rc.d/user/contents.d/meet-transcription:ro
+    environment:
+      - MEET_TRANSCRIPTION
+      - MEET_TRANSCRIBER_URL
+  web:
+    volumes:
+      - ${MEET_ROOT}/web/meet-transcription.js:/defaults/meet-transcription.js:ro
+      - ${MEET_ROOT}/web/s6/scripts/meet-transcription:/etc/s6-overlay/scripts/meet-transcription:ro
+      - ${MEET_ROOT}/web/s6/s6-rc.d/meet-transcription:/etc/s6-overlay/s6-rc.d/meet-transcription:ro
+      - ${MEET_ROOT}/web/s6/s6-rc.d/nginx/dependencies.d/meet-transcription:/etc/s6-overlay/s6-rc.d/nginx/dependencies.d/meet-transcription:ro
+      - ${MEET_ROOT}/web/s6/s6-rc.d/user/contents.d/meet-transcription:/etc/s6-overlay/s6-rc.d/user/contents.d/meet-transcription:ro
+    environment:
+      - MEET_TRANSCRIPTION
+      - MEET_TRANSCRIBER_URL

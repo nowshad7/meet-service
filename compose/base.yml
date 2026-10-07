@@ -16,6 +16,7 @@ services:
     environment:
       - XMPP_DOMAIN
       - XMPP_MUC_DOMAIN
+      - MEET_TRANSCRIPTION
       - MEET_EVENTS
       - MEET_APP_API_URL
       - MEET_APP_API_TOKEN

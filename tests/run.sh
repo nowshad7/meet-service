@@ -36,7 +36,7 @@ run_tool busted ghcr.io/lunarmodules/busted:v2.3.0 --output=utfTerminal tests/pl
 
 step shellcheck
 run_tool shellcheck koalaman/shellcheck:v0.11.0 -x scripts/meet services/recording-finalize/finalize.sh tests/*.sh
-run_tool shellcheck koalaman/shellcheck:v0.11.0 --shell=bash images/s6/scripts/meet-defaults
+run_tool shellcheck koalaman/shellcheck:v0.11.0 --shell=bash images/s6/scripts/meet-defaults jicofo/s6/scripts/meet-transcription web/s6/scripts/meet-transcription
 
 step recording finalize
 tests/finalize-test.sh
@@ -55,6 +55,9 @@ tests/contract-check.py "$samples"
 
 step prosody config fragments
 tests/prosody-config-check.sh
+
+step transcription config fragments
+tests/transcription-config-check.sh
 
 step image definitions
 UPSTREAM_VERSION="$(<UPSTREAM_VERSION)" docker buildx bake --check
