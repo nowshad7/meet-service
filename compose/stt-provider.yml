@@ -1,0 +1,5 @@
+# Optional read-only mount for privately supplied provider modules.
+services:
+  stt-gateway:
+    volumes:
+      - ${MEET_STT_PROVIDER_DIR}:/provider:ro

@@ -2,7 +2,7 @@
 
 `MEET_FEATURES=transcription` opts a deployment into a legacy Jigasi live-caption pilot on `stable-11146-2`.
 Use the source workflow (`scripts/meet`) for this pilot; the standalone `deploy/compose.yml` release workflow does not yet include it.
-It activates with either a nonempty private `JIGASI_TRANSCRIBER_WHISPER_URL` or a mounted private `MEET_STT_PROVIDER_MODULE`.
+It activates with either a nonempty private `JIGASI_TRANSCRIBER_WHISPER_URL` or a configured `MEET_STT_PROVIDER_MODULE` (bundled Gemini or a mounted private provider).
 With neither configured, or with the feature absent, it adds no transcriber, gateway or transcription overlay and leaves normal deployment behavior unchanged.
 
 ## What it does
@@ -45,12 +45,12 @@ Deployment brands overriding `plugin.head.html` must include this script themsel
 The transcriber waits for a Prosody healthcheck confirming both accounts exist, avoiding a first-start login race.
 The upstream Prosody initializer creates matching brewery and hidden participant accounts from these credentials.
 Configure the URL in the private deployment's `deployment.env` and any provider key in its uncommitted `secrets.env`.
-No provider key, model file, vendor endpoint or provider secret belongs in the repository or images.
+No provider key, model file or provider secret belongs in the repository or images.
 An external backend must implement Jigasi's streaming Whisper protocol.
 Alternatively use the generic gateway below to adapt a privately supplied batch speech provider.
-Keep provider implementation, credentials and model selection in the private deployment.
+Provider credentials and deployment-specific model selection stay in the private deployment; the Gemini adapter is open source.
 
-## Internal gateway and private provider
+## Internal gateway and providers
 
 Build the core image with `docker build -f services/stt-gateway/Dockerfile -t meet.local/meet-stt-gateway:dev .`.
 Configure these settings in the private deployment's `deployment.env`:
@@ -63,11 +63,13 @@ MEET_STT_PROVIDER_MODULE=/provider/adapter.mjs
 
 The directory contains the private module and its dependencies and is mounted read-only at `/provider`.
 The module exports `createProvider()` and returns the interface documented in [the provider contract](../../services/stt-gateway/README.md).
-No real provider, API key or model is bundled.
+The Gemini adapter is bundled; no API key or model weights are bundled.
 The gateway refuses to start without a provider.
 Add any provider-specific environment/secrets through the private deployment's `compose.yml` under `stt-gateway`.
 
-`scripts/meet` adds `compose/stt-gateway.yml` only when transcription and a module are configured, requires a provider directory, and sets Jigasi's URL to `ws://stt-gateway:8000/streaming-whisper/ws`.
+`scripts/meet` adds `compose/stt-gateway.yml` only when transcription and a module are configured, and sets Jigasi's URL to `ws://stt-gateway:8000/streaming-whisper/ws`.
+Private modules also require a provider directory and add `compose/stt-provider.yml` for its read-only mount.
+The bundled Gemini module requires no directory or mount.
 A configured module takes precedence over an external backend URL.
 Without a module the previous external backend route remains available.
 The gateway has no published host port; Jigasi waits for its readiness check.
@@ -75,15 +77,66 @@ Use `MEET_STT_GATEWAY_IMAGE` to select a privately deployed core image instead o
 The release bake includes a `stt-gateway` target; the standalone release compose still does not wire transcription.
 
 By default the gateway submits 3-second PCM windows with 500 ms overlap, preserving each speaker's header language.
-The private provider handles speech/silence boundaries, overlap reconciliation, and interim/final text.
+Each provider handles speech/silence boundaries, overlap reconciliation, and interim/final text.
 Queues, speaker counts and room connections are bounded; slow providers are aborted after 10 seconds and excess audio is dropped.
 Provider failures affect captions rather than the meeting transport.
 The core never logs audio or transcript text.
 A global limit of 32 active provider calls remains effective across reconnects, even when a provider ignores cancellation.
 See the provider contract for scheduling settings and disconnect limitations, and [the pinned protocol citations](../../services/stt-gateway/PROTOCOL.md) for exact formats.
 
-**No real provider was exercised.**
-Fake-provider transport tests demonstrate interoperability and scheduling only; recognition quality, language accuracy and production latency remain unverified.
+**No real provider was exercised by this repository's tests.**
+Fake-provider transport and Gemini HTTP tests demonstrate interoperability, scheduling and request handling only; recognition quality, language accuracy and production latency remain unverified.
+
+## Gemini provider
+
+Build the gateway image using the command above. In the per-deployment `deployment.env`, select:
+
+```sh
+MEET_FEATURES=transcription
+MEET_STT_PROVIDER_MODULE=/app/gemini.mjs
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_TIMEOUT_MS=8000
+```
+
+Keep `AUTH_TYPE=jwt` and the room entitlement and speaker-language claims described below.
+Place `GEMINI_API_KEY` only in that deployment's uncommitted `secrets.env` or equivalent injected per-deployment secret.
+There is no default key; missing/empty credentials fail gateway startup with a generic message.
+Never put a key, including a test key, in this repository, deployment templates, image build arguments or images.
+The compose overlay passes the runtime settings to the internal gateway without publishing its port.
+No private provider directory is needed for Gemini.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `GEMINI_API_KEY` | None | Required runtime deployment secret |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Gemini model identifier; must support audio input |
+| `GEMINI_TIMEOUT_MS` | `8000` | Positive integer deadline for the whole chunk request, including retry |
+
+The effective deadline is bounded by `MEET_STT_TIMEOUT_MS` (default 10000).
+The adapter uses Node's built-in HTTP fetch, sends mono 16-bit PCM wrapped in WAV to Google's `generateContent` API,
+and instructs it to transcribe exactly as spoken with the speaker's language hint, keeping Bangla in Bangla script and English words in English.
+Audio leaves the deployment for Google's API; the adapter does not upload saved transcripts or store audio.
+It returns each completed batch as a final segment using the existing provider contract, with no fabricated interim results.
+Empty chunks, exact digital silence and overlap-only finalization make no API request.
+Quiet microphone noise is not classified as silence locally.
+Confirmed overlap PCM is removed from consecutive successful windows; after dropped/failed windows or a language change the prefix is retained.
+This avoids re-submitting already processed audio, but speech split at a window boundary may be clipped; live boundary accuracy remains unverified.
+No transcript history is retained, and session scheduling metadata is released on disconnect.
+
+Network failures, HTTP 408 and selected transient 5xx responses get at most one retry after 500–749 ms of jittered backoff within the same deadline.
+Auth (401/403), quota/payment (402/429), other request failures and invalid/blocked responses raise sanitized provider errors without retry.
+The gateway discards those errors while keeping the meeting transport running.
+Neither adapter nor gateway logs keys, audio, transcripts or vendor error bodies.
+
+API shape and error handling were checked against Google's current [generateContent reference](https://ai.google.dev/api/generate-content),
+[audio format guide](https://ai.google.dev/gemini-api/docs/audio#supported-audio-formats),
+and [retry guidance](https://ai.google.dev/gemini-api/docs/troubleshooting#retry-strategy) on 2026-10-07.
+Requests use `contents[].parts[]` with text and base64 `inlineData` (`mimeType: audio/wav`), and `x-goog-api-key` header authentication;
+responses read non-thought text from `candidates[0].content.parts[]` only after `finishReason: STOP`.
+The model default follows the deployment requirement; model availability was not verified with a real API call.
+
+**Real-time latency, per-minute cost, and accuracy on live class audio are unverified.**
+A successful uploaded-file transcription does not establish live caption performance with short, overlapping speaker windows.
+Test representative Bangla/English classes, code-switching, quiet speech, boundary words and concurrent speakers before wider deployment.
 
 ## Contract
 
@@ -110,10 +163,11 @@ End-to-end encrypted audio cannot be recognized by a server transcriber.
 `tests/transcription-language.test.mjs` covers Bangla/English participant properties after initialization, reconnects and inert cases.
 `tests/transcription-config-check.sh` renders pinned image templates and checks the merged compose configuration, Whisper settings, matching account names and disabled transcript saving.
 `tests/stt-gateway.test.mjs` uses source-built binary frames and a fake provider to check real WebSocket transport, PCM windows, overlap, interim/final responses, per-speaker language, timeout/queue bounds and disconnect cleanup.
+`tests/stt-gemini.test.mjs` uses a local fake HTTP server and ephemeral in-memory authentication material to check WAV requests, header authentication, language hints, overlap, errors, retry/timeout/cancellation and absence of logs. It never calls the real API.
 `tests/stt-stack-check.sh` starts an isolated gateway container and sends source-format frames using the Jetty and JSON-simple libraries bundled in the pinned Jigasi image.
 It verifies WebSocket connectivity and result parsing with a fake provider, without joining a meeting.
 These checks verify wiring and simulated client/server behavior, not recognition quality or a live meeting.
 
 Live Bangla captions have **not been tested end to end**.
 Bangla accuracy, same-speaker code-switching, latency and concurrent-class capacity are unmeasured.
-Evaluate real Bangladeshi classroom audio, speaker association, stop/restart, privacy rooms and poor microphones against the private backend before making any wider support promise.
+Evaluate real Bangladeshi classroom audio, speaker association, stop/restart, privacy rooms and poor microphones against the selected backend before making any wider support promise.

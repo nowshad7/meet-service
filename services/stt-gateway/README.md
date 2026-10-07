@@ -1,9 +1,11 @@
-# Private provider interface
+# Speech provider interface
 
-The core contains transport and scheduling only.
+The gateway contains transport, scheduling and the optional open-source Gemini batch provider.
 It imports the absolute `MEET_STT_PROVIDER_MODULE` path at startup and calls its exported `createProvider()` once, awaiting the result.
-Startup fails with a generic message if no usable provider is mounted.
-Only tests contain a fake provider; the image contains no recognition implementation or credentials.
+Startup fails with a generic message if no usable provider is selected.
+Set `MEET_STT_PROVIDER_MODULE=/app/gemini.mjs` to select the bundled Gemini provider,
+or mount a private module under `/provider`. The image contains no credentials.
+See [Gemini setup and limitations](../../docs/features/transcription.md#gemini-provider).
 
 The returned object must implement:
 
