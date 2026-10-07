@@ -7,7 +7,7 @@ UPSTREAM_REPO="${MEET_UPSTREAM_REPO:-https://github.com/jitsi/docker-jitsi-meet.
 UPSTREAM_VERSION="$(<"$ROOT/UPSTREAM_VERSION")"
 DEPLOYMENTS_DIR="${MEET_DEPLOYMENTS_DIR:-$ROOT/deployments}"
 [[ "$DEPLOYMENTS_DIR" == /* ]] || DEPLOYMENTS_DIR="$PWD/$DEPLOYMENTS_DIR"
-KNOWN_FEATURES="recording app-proxy"
+KNOWN_FEATURES="recording app-proxy transcription"
 KNOWN_PLUGINS="events room-gate control single-session privacy"
 GENERATED_SECRET_BYTES=24
 UPGRADE_WATCHED_MODULES="token_verification room_metadata_component muc_meeting_id reservations"
@@ -152,6 +152,22 @@ derive_plugin_settings() {
 }
 
 derive_feature_settings() {
+  export MEET_TRANSCRIPTION_ENABLED=0
+  if has_item "$MEET_FEATURES" transcription && [[ -n "${JIGASI_TRANSCRIBER_WHISPER_URL:-}" ]]; then
+    [[ "${AUTH_TYPE:-}" == jwt ]] || die "transcription requires AUTH_TYPE=jwt"
+    require_settings JIGASI_XMPP_PASSWORD JIGASI_TRANSCRIBER_PASSWORD
+    export MEET_TRANSCRIPTION_ENABLED=1 ENABLE_TRANSCRIPTIONS=1
+    export JIGASI_XMPP_USER="${JIGASI_XMPP_USER:-jigasi}"
+    export JIGASI_TRANSCRIBER_USER="${JIGASI_TRANSCRIBER_USER:-transcriber}"
+    export JIGASI_BREWERY_MUC="${JIGASI_BREWERY_MUC:-jigasibrewery}"
+    export XMPP_HIDDEN_DOMAIN="${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}"
+    export JIGASI_TRANSCRIBER_CUSTOM_SERVICE=org.jitsi.jigasi.transcription.WhisperTranscriptionService
+    export JIGASI_TRANSCRIBER_ENABLE_SAVING=false JIGASI_TRANSCRIBER_RECORD_AUDIO=false
+    export JIGASI_TRANSCRIBER_ADVERTISE_URL=false JIGASI_TRANSCRIBER_ENABLE_TRANSLATION=false
+    XMPP_MUC_MODULES="$(append_csv "$XMPP_MUC_MODULES" meet_transcription)"
+    export XMPP_MUC_MODULES
+  fi
+
   if has_item "$MEET_FEATURES" recording; then
     require_settings MEET_APP_API_URL MEET_APP_API_TOKEN
     export ENABLE_RECORDING=1 ENABLE_SERVICE_RECORDING=1
@@ -168,9 +184,11 @@ compose_files() {
   upstream="$(upstream_dir)"
   echo "--file=$upstream/docker-compose.yml"
   has_item "$MEET_FEATURES" recording && echo "--file=$upstream/jibri.yml"
+  [[ "$MEET_TRANSCRIPTION_ENABLED" == 1 ]] && echo "--file=$upstream/transcriber.yml"
   echo "--file=$ROOT/compose/base.yml"
   local feature
   for feature in ${MEET_FEATURES//,/ }; do
+    [[ "$feature" == transcription && "$MEET_TRANSCRIPTION_ENABLED" != 1 ]] && continue
     echo "--file=$ROOT/compose/$feature.yml"
   done
   [[ -f "$MEET_DEPLOYMENT_DIR/compose.yml" ]] && echo "--file=$MEET_DEPLOYMENT_DIR/compose.yml"
@@ -208,7 +226,7 @@ prepare_brand() {
 }
 
 make_data_tree() {
-  mkdir -p "$CONFIG"/{web,transcripts,jicofo,jvb,jigasi,jibri} \
+  mkdir -p "$CONFIG"/{web,transcripts,jicofo,jvb,jigasi,jibri,transcriber} \
            "$CONFIG"/prosody/{config/conf.d,prosody-plugins-custom} \
            "$CONFIG"/storage/{web,prosody,transcripts,jibri/logs,jibri/recordings} \
            "$CONFIG"/tmp/web-load-test \
@@ -224,7 +242,7 @@ fill_secrets() {
   local dir="$1" secrets="$1/secrets.env" empty name
   [[ -f "$secrets" ]] || { cp "$dir/secrets.env.example" "$secrets"; chmod 600 "$secrets"; }
 
-  empty="$(sed -n 's/^\([A-Z][A-Z0-9_]*\)=$/\1/p' "$secrets")"
+  empty="$(sed -n '/^JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY=$/d; s/^\([A-Z][A-Z0-9_]*\)=$/\1/p' "$secrets")"
   if [[ -z "$empty" ]]; then
     echo "secrets already present in ${secrets#"$ROOT"/}, left alone"
     return
@@ -316,7 +334,8 @@ cmd_env() {
   for name in COMPOSE_PROJECT_NAME MEET_DEPLOYMENT_DIR CONFIG JITSI_IMAGE_VERSION MEET_FEATURES MEET_PLUGINS MEET_EVENTS \
               XMPP_MODULES XMPP_MUC_MODULES XMPP_MUC_CONFIGURATION JWT_ASAP_KEYSERVER \
               PROSODY_RESERVATION_ENABLED PROSODY_RESERVATION_REST_BASE_URL \
-              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST; do
+              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST \
+              MEET_TRANSCRIPTION_ENABLED ENABLE_TRANSCRIPTIONS JIGASI_XMPP_USER JIGASI_TRANSCRIBER_USER JIGASI_BREWERY_MUC; do
     echo "$name=${!name:-}"
   done
   local files

@@ -44,6 +44,9 @@ tests/finalize-test.sh
 step scripts/meet
 tests/meet-test.sh
 
+step transcription language bridge
+run_tool node node:22-alpine --test tests/transcription-language.test.mjs
+
 step reference app
 run_tool node node:22-alpine --test --test-reporter=spec examples/app-node/app.test.mjs
 
@@ -55,6 +58,9 @@ tests/contract-check.py "$samples"
 
 step prosody config fragments
 tests/prosody-config-check.sh
+
+step transcription generated config
+tests/transcription-config-check.sh
 
 step image definitions
 UPSTREAM_VERSION="$(<UPSTREAM_VERSION)" docker buildx bake --check

@@ -138,6 +138,7 @@ function fake.new(options)
 
     world.util = {
         is_healthcheck_room = function(jid) return jid:match("^__jicofo%-health%-check") ~= nil end,
+        is_transcriber = function(jid) return jid == "transcriber@hidden.meet.jitsi" end,
         is_admin = function(jid) return jid == "focus@auth.meet.jitsi" end,
         async_handler_wrapper = function(event, handler) return handler(event) end,
         room_jid_match_rewrite = function(jid) return jid end,

@@ -1,0 +1,46 @@
+# Included only when the deployment opts in and its private Whisper URL is nonempty.
+services:
+  web:
+    environment:
+      - ENABLE_TRANSCRIPTIONS
+  jicofo:
+    environment:
+      - ENABLE_TRANSCRIPTIONS
+      - JIGASI_BREWERY_MUC
+  prosody:
+    # TCP readiness precedes upstream account registration; wait for both accounts.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          prosodyctl --config /run/prosody/config/prosody.cfg.lua shell user list "$${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}"
+          | grep -qxF "$${JIGASI_XMPP_USER:-jigasi}@$${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}"
+          && prosodyctl --config /run/prosody/config/prosody.cfg.lua shell user list "$${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}"
+          | grep -qxF "$${JIGASI_TRANSCRIBER_USER:-transcriber}@$${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    environment:
+      - ENABLE_TRANSCRIPTIONS
+      - MEET_TRANSCRIPTION_ENABLED
+      - JIGASI_XMPP_USER
+      - JIGASI_XMPP_PASSWORD
+      - JIGASI_TRANSCRIBER_USER
+      - JIGASI_TRANSCRIBER_PASSWORD
+      - XMPP_HIDDEN_DOMAIN
+  transcriber:
+    depends_on:
+      prosody:
+        condition: service_healthy
+    volumes:
+      - ${MEET_ROOT}/compose/transcription.properties:/config/custom-sip-communicator.properties:ro
+    environment:
+      - JIGASI_TRANSCRIBER_CUSTOM_SERVICE
+      - JIGASI_TRANSCRIBER_ENABLE_SAVING=false
+      - JIGASI_TRANSCRIBER_RECORD_AUDIO=false
+      - JIGASI_TRANSCRIBER_ADVERTISE_URL=false
+      - JIGASI_TRANSCRIBER_ENABLE_TRANSLATION=false
+      - JIGASI_TRANSCRIBER_WHISPER_URL
+      - JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY
+      - JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY_NAME
