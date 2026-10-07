@@ -16,3 +16,9 @@ config.constraints = {
 config.enableClosePage = true;
 
 config.localRecording = { disable: true };
+
+// The live-caption pilot recognizes source speech only.
+if (config.transcription?.enabled) {
+    config.transcription.translationLanguages = [];
+    config.transcription.translationLanguagesHead = [];
+}

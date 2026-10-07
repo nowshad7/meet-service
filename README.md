@@ -74,6 +74,7 @@ Set the switch shown below, then `docker compose up -d`.
 | [Privacy](docs/features/privacy.md) | `MEET_PLUGINS=privacy` | Participants muted until approved, chat to moderators only |
 | [Single session](docs/features/single-session.md) | `MEET_PLUGINS=single-session` | One seat per user across tabs and devices |
 | [Recording](docs/features/recording.md) | `MEET_FEATURES=recording` | Jibri recordings uploaded to your app with retries |
+| [Transcription pilot](docs/features/transcription.md) | `MEET_FEATURES=transcription` with a private Whisper URL | Legacy Jigasi live captions; Bangla recognition unverified |
 | [App proxy](docs/features/app-proxy.md) | `MEET_FEATURES=app-proxy` | Reach an app that runs on the same docker host |
 | Branding and wording | `brand/` in the deployment folder, `MEET_TEXT_*` | Your logo, colours, page titles and notices |
 

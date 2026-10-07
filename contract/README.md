@@ -47,7 +47,7 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
 | `privacy: true` | Participants stay muted until a moderator approves them; they cannot post to the group chat and may send private messages to moderators only | `privacy` |
 | `publicChat: false` | Participants cannot post to the group chat; private messages stay open | `privacy` |
 | `lobby_autostart: false` | The lobby does not switch on automatically for this room | upstream `token_lobby_autostart` |
-| `transcription` | `{enabled, language, autoStart, save}` for live captions | captions (not yet available) |
+| `transcription` | `{enabled, language, autoStart, save}` for live captions | [transcription pilot](../docs/features/transcription.md); uses `enabled` and `language` (`bn`/`en`), ignores `autoStart`/`save` |
 
 Room options come from the first token that carries them; later tokens do not change a room that is already set.
 Anything missing falls back to the deployment default.

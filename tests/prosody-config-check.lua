@@ -15,6 +15,7 @@ end
 local config = load(os.getenv("CHECK_CASE"))
 
 if os.getenv("CHECK_CASE") == "all-set" then
+    expect(config.get("*", "meet_transcription_enabled"), true, "transcription opt-in")
     expect(config.get("*", "reservations_api_headers").Authorization, "Bearer test-token", "room gate header")
     expect(config.get("*", "prosody_password_public_key_repo_url"), "http://app.internal/control-keys", "control keys")
     expect(config.get("*", "meet_control_removed_notice"), "Removed.", "removed notice")
@@ -24,6 +25,7 @@ if os.getenv("CHECK_CASE") == "all-set" then
     expect(config.get("events.example.org", "api_prefix"), "http://app.internal/meet/api", "events api")
     expect(config.get("events.example.org", "api_headers").Authorization, "Bearer test-token", "events header")
 else
+    expect(config.get("*", "meet_transcription_enabled"), false, "transcription default")
     expect(config.get("*", "reservations_api_headers"), nil, "room gate header")
     expect(config.get("*", "prosody_password_public_key_repo_url"), nil, "control keys")
     expect(config.get("*", "meet_control_removed_notice"), nil, "removed notice")

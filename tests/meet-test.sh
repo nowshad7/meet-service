@@ -77,10 +77,33 @@ echo "MEET_APP_PROXY_HOST=app.local" >>"$PRIVATE/acme/deployment.env"
 actual="$(private_meet env acme)"
 expect "compose $WORK/compose/app-proxy.yml"
 
+# The optional backend key remains empty during init, and inactive transcription is inert.
+sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=transcription/' "$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "MEET_TRANSCRIPTION_ENABLED=0"
+grep -q 'transcriber.yml\|compose/transcription.yml' <<<"$actual" && fail "empty backend must add no transcription compose"
+echo 'JIGASI_TRANSCRIBER_WHISPER_URL=ws://whisper.internal:8000' >>"$PRIVATE/acme/deployment.env"
+if private_meet env acme 2>"$WORK/err"; then fail "transcription requires JWT authentication"; fi
+sed -i 's/^AUTH_TYPE=.*/AUTH_TYPE=jwt/' "$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "MEET_TRANSCRIPTION_ENABLED=1"
+expect "ENABLE_TRANSCRIPTIONS=1"
+expect "JIGASI_XMPP_USER=jigasi"
+expect "JIGASI_TRANSCRIBER_USER=transcriber"
+expect "JIGASI_BREWERY_MUC=jigasibrewery"
+expect "XMPP_MUC_MODULES=token_affiliation,token_lobby_bypass,token_lobby_autostart,meet_privacy,meet_transcription"
+expect "compose $WORK/.upstream/$(<"$ROOT/UPSTREAM_VERSION")/transcriber.yml"
+expect "compose $WORK/compose/transcription.yml"
+sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=app-proxy/' "$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "MEET_TRANSCRIPTION_ENABLED=0"
+grep -q 'transcriber.yml\|compose/transcription.yml' <<<"$actual" && fail "feature off must add no transcriber"
+sed -i 's/^JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY=.*/JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY=/' "$PRIVATE/acme/secrets.env"
 sed -i 's/^MEET_APP_API_TOKEN=.*/MEET_APP_API_TOKEN=/' "$PRIVATE/acme/secrets.env"
 count_kept_secrets() { grep -c '=test-secret$' "$PRIVATE/acme/secrets.env"; }
 before="$(count_kept_secrets)"
 MEET_UPSTREAM_REPO=/nonexistent private_meet init acme >/dev/null 2>&1 || true
+grep -qxF "JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY=" "$PRIVATE/acme/secrets.env" || fail "optional provider key must stay empty"
 [[ "$(count_kept_secrets)" -eq "$before" ]] || fail "init must keep existing secrets"
 grep -qE '^MEET_APP_API_TOKEN=[0-9a-f]{48}$' "$PRIVATE/acme/secrets.env" \
   || fail "init should fill the empty secret"

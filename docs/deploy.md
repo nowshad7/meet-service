@@ -208,7 +208,7 @@ It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/
 
 | Setting | Meaning |
 |---|---|
-| `MEET_FEATURES` | Optional containers: `recording`, `app-proxy` |
+| `MEET_FEATURES` | Optional containers: `recording`, `app-proxy`, `transcription` (source workflow only; see [pilot setup](features/transcription.md)) |
 | `MEET_PLUGINS` | `events`, `room-gate`, `control`, `single-session`, `privacy` |
 | `MEET_APP_API_URL` | Base URL of the app's endpoints (room gate, webhooks, recordings) |
 | `MEET_APP_KEYS_URL` | Join-token public keys; becomes `JWT_ASAP_KEYSERVER` and the MUC `asap_key_server` |
