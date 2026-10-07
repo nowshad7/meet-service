@@ -69,4 +69,18 @@ for service in ['web', 'prosody', 'jicofo']:
 assert 'meet_transcription' in services['prosody']['environment']['XMPP_MUC_MODULES']
 assert any(v['target'] == '/config/custom-sip-communicator.properties' for v in t['volumes'])
 PY
+# Internal gateway adds no published port and replaces the external URL only when configured.
+printf '\nMEET_STT_PROVIDER_MODULE=/provider/adapter.mjs\nMEET_STT_PROVIDER_DIR=%s\n' "$WORK/provider" >>"$WORK/deployments/pilot/deployment.env"
+"$WORK/scripts/meet" compose pilot config --format json >"$WORK/gateway-compose.json"
+python3 - "$WORK/gateway-compose.json" <<'PYCODE'
+import json, sys
+services = json.load(open(sys.argv[1]))['services']
+g = services['stt-gateway']
+assert not g.get('ports')
+assert g['read_only']
+assert g['environment']['MEET_STT_PROVIDER_MODULE'] == '/provider/adapter.mjs'
+assert g['volumes'][0]['target'] == '/provider' and g['volumes'][0]['read_only']
+assert services['transcriber']['depends_on']['stt-gateway']['condition'] == 'service_healthy'
+assert services['transcriber']['environment']['JIGASI_TRANSCRIBER_WHISPER_URL'] == 'ws://stt-gateway:8000/streaming-whisper/ws'
+PYCODE
 printf 'transcription generated config: ok\n'

@@ -18,7 +18,7 @@ variable "SOURCE_URL" {
 }
 
 group "default" {
-  targets = ["meet"]
+  targets = ["meet", "stt-gateway"]
 }
 
 target "meet" {
@@ -35,5 +35,16 @@ target "meet" {
     "org.opencontainers.image.version"   = element(split(",", TAGS), 0)
     "org.opencontainers.image.licenses"  = "Apache-2.0"
     "org.opencontainers.image.base.name" = service == "app-proxy" ? "docker.io/library/nginx:alpine" : "ghcr.io/jitsi/${service}:${UPSTREAM_VERSION}"
+  }
+}
+
+
+target "stt-gateway" {
+  context = "."
+  dockerfile = "services/stt-gateway/Dockerfile"
+  tags = [for tag in split(",", TAGS) : "${REGISTRY}/meet-stt-gateway:${tag}"]
+  labels = {
+    "org.opencontainers.image.source" = SOURCE_URL
+    "org.opencontainers.image.licenses" = "Apache-2.0"
   }
 }

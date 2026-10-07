@@ -8,3 +8,5 @@ deployments/*
 !deployments/_template/
 !deployments/example/
 !deployments/example-production/
+
+services/stt-gateway/node_modules/

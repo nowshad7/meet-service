@@ -1,0 +1,7 @@
+{
+  "name": "meet-stt-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test ../../tests/stt-gateway.test.mjs" },
+  "dependencies": { "ws": "8.22.0" }
+}

@@ -47,6 +47,15 @@ tests/meet-test.sh
 step transcription language bridge
 run_tool node node:22-alpine --test tests/transcription-language.test.mjs
 
+step STT gateway
+# Use the gateway image so CI and local checks share its locked dependencies.
+docker build -q -f services/stt-gateway/Dockerfile -t meet-stt-gateway-test .
+docker run --rm --entrypoint sh -v "$ROOT/tests:/source-tests:ro" \
+  meet-stt-gateway-test -c 'mkdir -p /tmp/check/services /tmp/check/tests; ln -s /app /tmp/check/services/stt-gateway; cp /source-tests/stt-*.mjs /tmp/check/tests/; node --test /tmp/check/tests/stt-gateway.test.mjs'
+
+step pinned Jigasi gateway transport
+tests/stt-stack-check.sh
+
 step reference app
 run_tool node node:22-alpine --test --test-reporter=spec examples/app-node/app.test.mjs
 

@@ -1,0 +1,30 @@
+# Added by scripts/meet only with transcription opt-in AND a private module.
+services:
+  stt-gateway:
+    image: ${MEET_STT_GATEWAY_IMAGE:-meet.local/meet-stt-gateway:dev}
+    build:
+      context: ${MEET_ROOT}
+      dockerfile: services/stt-gateway/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ${MEET_STT_PROVIDER_DIR}:/provider:ro
+    environment:
+      - MEET_STT_PROVIDER_MODULE
+      - MEET_STT_WINDOW_MS
+      - MEET_STT_OVERLAP_MS
+      - MEET_STT_IDLE_MS
+      - MEET_STT_TIMEOUT_MS
+      - MEET_STT_MAX_ACTIVE_CALLS
+      - MEET_STT_MAX_QUEUE
+      - MEET_STT_MAX_SPEAKERS
+      - MEET_STT_MAX_CONNECTIONS
+    networks:
+      meet.jitsi:
+    # Internal-only: no host port, authentication or provider secrets in core.
+  transcriber:
+    depends_on:
+      stt-gateway:
+        condition: service_healthy

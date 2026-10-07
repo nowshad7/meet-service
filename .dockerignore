@@ -3,3 +3,5 @@
 !prosody/
 !web/
 !services/
+
+**/node_modules

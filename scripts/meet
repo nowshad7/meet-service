@@ -153,6 +153,14 @@ derive_plugin_settings() {
 
 derive_feature_settings() {
   export MEET_TRANSCRIPTION_ENABLED=0
+  export MEET_STT_GATEWAY_ENABLED=0
+  if has_item "$MEET_FEATURES" transcription && [[ -n "${MEET_STT_PROVIDER_MODULE:-}" ]]; then
+    [[ "$MEET_STT_PROVIDER_MODULE" == /provider/* ]] || die "MEET_STT_PROVIDER_MODULE must be under /provider/"
+    require_settings MEET_STT_PROVIDER_DIR
+    [[ "$MEET_STT_PROVIDER_DIR" == /* ]] || die "MEET_STT_PROVIDER_DIR must be absolute"
+    export MEET_STT_GATEWAY_ENABLED=1
+    export JIGASI_TRANSCRIBER_WHISPER_URL=ws://stt-gateway:8000/streaming-whisper/ws
+  fi
   if has_item "$MEET_FEATURES" transcription && [[ -n "${JIGASI_TRANSCRIBER_WHISPER_URL:-}" ]]; then
     [[ "${AUTH_TYPE:-}" == jwt ]] || die "transcription requires AUTH_TYPE=jwt"
     require_settings JIGASI_XMPP_PASSWORD JIGASI_TRANSCRIBER_PASSWORD
@@ -191,6 +199,7 @@ compose_files() {
     [[ "$feature" == transcription && "$MEET_TRANSCRIPTION_ENABLED" != 1 ]] && continue
     echo "--file=$ROOT/compose/$feature.yml"
   done
+  [[ "$MEET_STT_GATEWAY_ENABLED" == 1 ]] && echo "--file=$ROOT/compose/stt-gateway.yml"
   [[ -f "$MEET_DEPLOYMENT_DIR/compose.yml" ]] && echo "--file=$MEET_DEPLOYMENT_DIR/compose.yml"
   return 0
 }
