@@ -1,4 +1,4 @@
-# Added by scripts/meet only with transcription opt-in AND a private module.
+# Added by scripts/meet only with transcription opt-in AND a provider module.
 services:
   stt-gateway:
     image: ${MEET_STT_GATEWAY_IMAGE:-meet.local/meet-stt-gateway:dev}
@@ -9,10 +9,11 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    volumes:
-      - ${MEET_STT_PROVIDER_DIR}:/provider:ro
     environment:
       - MEET_STT_PROVIDER_MODULE
+      - GEMINI_API_KEY
+      - GEMINI_MODEL
+      - GEMINI_TIMEOUT_MS
       - MEET_STT_WINDOW_MS
       - MEET_STT_OVERLAP_MS
       - MEET_STT_IDLE_MS
@@ -23,7 +24,7 @@ services:
       - MEET_STT_MAX_CONNECTIONS
     networks:
       meet.jitsi:
-    # Internal-only: no host port, authentication or provider secrets in core.
+    # Internal-only: no host port; provider credentials are injected only at runtime.
   transcriber:
     depends_on:
       stt-gateway:

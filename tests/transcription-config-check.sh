@@ -83,4 +83,17 @@ assert g['volumes'][0]['target'] == '/provider' and g['volumes'][0]['read_only']
 assert services['transcriber']['depends_on']['stt-gateway']['condition'] == 'service_healthy'
 assert services['transcriber']['environment']['JIGASI_TRANSCRIBER_WHISPER_URL'] == 'ws://stt-gateway:8000/streaming-whisper/ws'
 PYCODE
+# Built-in Gemini is available without a private module mount or a key in config.
+sed -i 's|^MEET_STT_PROVIDER_MODULE=.*|MEET_STT_PROVIDER_MODULE=/app/gemini.mjs|' "$WORK/deployments/pilot/deployment.env"
+sed -i '/^MEET_STT_PROVIDER_DIR=/d' "$WORK/deployments/pilot/deployment.env"
+"$WORK/scripts/meet" compose pilot config --format json >"$WORK/gemini-compose.json"
+python3 - "$WORK/gemini-compose.json" <<'PYCODE'
+import json, sys
+services = json.load(open(sys.argv[1]))['services']
+g = services['stt-gateway']
+assert g['environment']['MEET_STT_PROVIDER_MODULE'] == '/app/gemini.mjs'
+assert not g.get('volumes') and not g.get('ports')
+assert not g['environment'].get('GEMINI_API_KEY')
+assert services['transcriber']['depends_on']['stt-gateway']['condition'] == 'service_healthy'
+PYCODE
 printf 'transcription generated config: ok\n'
