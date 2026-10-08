@@ -1,13 +1,13 @@
 # Speech provider interface
 
-The gateway contains transport, scheduling and the optional open-source Gemini batch provider.
+The gateway contains transport, scheduling and the optional open-source Gemini batch and Live providers.
 It imports the absolute `MEET_STT_PROVIDER_MODULE` path at startup and calls its exported `createProvider()` once, awaiting the result.
 Startup fails with a generic message if no usable provider is selected.
 Set `MEET_STT_PROVIDER_MODULE=/app/gemini.mjs` to select the bundled Gemini provider,
 or mount a private module under `/provider`. The image contains no credentials.
 See [Gemini setup and limitations](../../docs/features/transcription.md#gemini-provider).
 
-The returned object must implement:
+A batch provider implements:
 
 ```js
 async transcribe({
@@ -64,3 +64,34 @@ The service listens on port 8000 and serves `/health` for readiness.
 The compose overlay publishes no host port and uses the private Jitsi network.
 It does not validate backend bearer tokens; keep it reachable only by trusted internal transcribers.
 Add provider credentials and any additional private mounts/env in the private deployment's compose overlay, never in this repository or image.
+
+## Continuous providers
+
+A provider may instead implement the synchronous `openStream` method below.
+When present, it takes precedence over `transcribe`; the existing batch interface is unchanged.
+The gateway passes each incoming PCM frame immediately, with no windows or overlap.
+
+```js
+openStream({ sessionId, participantId, language, sampleRate, onResult }) {
+    return {
+        write(audio) { /* synchronously accept a PCM Buffer into a bounded queue */ },
+        endAudio() { /* signal idle/EOF; later write calls reopen audio */ },
+        close() { /* cancel timers, network and queues synchronously */ }
+    };
+}
+```
+
+Call `onResult({ text, isFinal, variance })` as recognition arrives, with the same result contract as batch calls.
+An interim is the complete current utterance, not a new fragment; a final commits that utterance in Jigasi.
+The gateway never sends empty text to clear captions.
+Idle and EOF call `endAudio`; language changes close the old stream and open a new one with the new hint.
+Disconnect calls `close` and suppresses later callbacks.
+Invalid results and synchronous provider failures are discarded without exposing error content.
+`MEET_STT_MAX_ACTIVE_CALLS` also caps open continuous streams globally; batch and streaming are selected per process.
+Streaming providers own startup deadlines, reconnection and bounded queues rather than the batch call timeout.
+No per-speaker departure frame exists, so idle speaker streams occupy a slot until language change or room disconnect.
+The same speaker/room caps and slow caption consumer limit apply.
+
+Select `/app/gemini-live.mjs` for the bundled continuous Gemini implementation.
+It uses the existing PCM bytes without resampling because the pinned Jigasi capture device already emits exactly the required format.
+See [Live configuration and limitations](../../docs/features/transcription.md#gemini-live-provider).
