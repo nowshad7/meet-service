@@ -155,8 +155,8 @@ derive_feature_settings() {
   export MEET_TRANSCRIPTION_ENABLED=0
   export MEET_STT_GATEWAY_ENABLED=0
   if has_item "$MEET_FEATURES" transcription && [[ -n "${MEET_STT_PROVIDER_MODULE:-}" ]]; then
-    if [[ "$MEET_STT_PROVIDER_MODULE" != /app/gemini.mjs ]]; then
-      [[ "$MEET_STT_PROVIDER_MODULE" == /provider/* ]] || die "MEET_STT_PROVIDER_MODULE must be /app/gemini.mjs or under /provider/"
+    if [[ "$MEET_STT_PROVIDER_MODULE" != /app/gemini.mjs && "$MEET_STT_PROVIDER_MODULE" != /app/gemini-live.mjs ]]; then
+      [[ "$MEET_STT_PROVIDER_MODULE" == /provider/* ]] || die "MEET_STT_PROVIDER_MODULE must be /app/gemini.mjs, /app/gemini-live.mjs or under /provider/"
       require_settings MEET_STT_PROVIDER_DIR
       [[ "$MEET_STT_PROVIDER_DIR" == /* ]] || die "MEET_STT_PROVIDER_DIR must be absolute"
     fi

@@ -22,6 +22,7 @@ export function createGateway(provider, options = {}) {
     }
     if (config.overlapMs >= config.windowMs || config.windowMs > 30000) throw new Error('invalid_window');
     let activeCalls = 0;
+    let activeStreams = 0;
     const windowBytes = config.windowMs * 32;
     const overlapBytes = config.overlapMs * 32;
     const server = http.createServer((req, res) => {
@@ -50,6 +51,33 @@ export function createGateway(provider, options = {}) {
                 participant_id: participantId, text: result.text });
             ws.send(payload.slice(0, -1) + ',"variance":' + Number(result.variance ?? 0).toFixed(6) + '}');
         }
+        function closeStream(s) {
+            const stream = s.stream;
+            if (!stream) return;
+            s.stream = null; activeStreams--;
+            try { stream.close(); } catch { /* discard provider errors */ }
+        }
+        function writeStream(s, audio) {
+            if (!s.stream) {
+                if (activeStreams >= config.maxActiveCalls) return;
+                // openStream is synchronous; providers buffer bounded startup audio.
+                let stream;
+                try {
+                    stream = provider.openStream({ sessionId, participantId: s.id,
+                        language: s.language, sampleRate: 16000,
+                        onResult(result) {
+                            if (!closed && s.stream === stream) {
+                                try { send(s.id, result); } catch { /* invalid provider result */ }
+                            }
+                        } });
+                    if (!stream || !['write', 'endAudio', 'close'].every(k => typeof stream[k] === 'function')) {
+                        stream?.close?.(); return;
+                    }
+                } catch { return; }
+                s.stream = stream; activeStreams++;
+            }
+            try { s.stream.write(audio); } catch { closeStream(s); }
+        }
         function pump(s) {
             if (closed || s.busy || !s.queue.length) return;
             if (activeCalls >= config.maxActiveCalls) { s.queue = []; return; }
@@ -75,7 +103,9 @@ export function createGateway(provider, options = {}) {
         }
         function flush(s) {
             clearTimeout(s.idle);
-            if (s.pending) enqueue(s, s.buffer, true, s.prefix / 2);
+            if (s.stream) {
+                try { s.stream.endAudio(); } catch { closeStream(s); }
+            } else if (s.pending) enqueue(s, s.buffer, true, s.prefix / 2);
             s.buffer = Buffer.alloc(0); s.prefix = 0; s.pending = false;
         }
         ws.on('message', (data, binary) => {
@@ -91,8 +121,13 @@ export function createGateway(provider, options = {}) {
                         prefix: 0, sequence: 0, queue: [], busy: false };
                     speakers.set(s.id, s);
                 }
-                if (s.language !== frame.language) { flush(s); s.language = frame.language; }
+                if (s.language !== frame.language) { flush(s); closeStream(s); s.language = frame.language; }
                 clearTimeout(s.idle);
+                if (typeof provider.openStream === 'function') {
+                    writeStream(s, frame.audio);
+                    s.idle = setTimeout(() => flush(s), config.idleMs);
+                    return;
+                }
                 s.buffer = Buffer.concat([s.buffer, frame.audio]);
                 s.pending = true;
                 while (s.buffer.length >= windowBytes) {
@@ -107,7 +142,7 @@ export function createGateway(provider, options = {}) {
         ws.on('close', () => {
             closed = true;
             for (const s of speakers.values()) {
-                clearTimeout(s.idle); s.controller?.abort(); s.queue = []; s.buffer = Buffer.alloc(0);
+                clearTimeout(s.idle); closeStream(s); s.controller?.abort(); s.queue = []; s.buffer = Buffer.alloc(0);
             }
             speakers.clear();
             Promise.resolve().then(() => provider.releaseSession?.({ sessionId })).catch(() => {});
