@@ -61,6 +61,9 @@ services:
 
   jvb:
     <<: *service
+    tmpfs:
+      - /run:size=64M,mode=1750,exec
+      - /tmp:size=16M,mode=1777,noexec
     image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jvb:${MEET_VERSION:?set MEET_VERSION in .env}
     environment:
       - SENTRY_DSN=${JVB_SENTRY_DSN:-0}

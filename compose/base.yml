@@ -26,3 +26,8 @@ services:
       - MEET_TEXT_SEAT_REPLACED
     ports:
       - "${MEET_CONTROL_BIND:-127.0.0.1}:${MEET_CONTROL_PORT:-5280}:5280"
+
+  jvb:
+    tmpfs: !override
+      - /run:size=64M,mode=1750,exec
+      - /tmp:size=16M,mode=1777,noexec
