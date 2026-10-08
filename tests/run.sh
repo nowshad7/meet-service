@@ -77,4 +77,7 @@ UPSTREAM_VERSION="$(<UPSTREAM_VERSION)" docker buildx bake --check
 step deploy compose
 check_deploy_compose
 
+step JVB native SCTP tmpfs capacity
+tests/jvb-tmpfs-check.sh
+
 echo "all checks passed"

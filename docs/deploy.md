@@ -89,6 +89,10 @@ acme/
 Every `docker compose` command works from the folder as usual: `logs -f prosody`, `restart web`, `down` (never `down -v`, it deletes all Jitsi state).
 From any checkout of this repository, `tests/stack-check.sh --dir /path/to/acme` checks health and that every plugin in `MEET_PLUGINS` is loaded and answering.
 
+JVB uses an executable 64 MiB `/run` tmpfs because its launcher extracts the 16,284,272-byte native SCTP library into `/run/jvb/tmp`.
+The 16 MiB limit leaves too little space after runtime files and causes `UnsatisfiedLinkError: no dcsctp4j` when participants connect.
+The same 16 MiB limit exists in the pinned [upstream docker-jitsi-meet defaults](https://github.com/jitsi/docker-jitsi-meet/blob/stable-11146-2/docker-compose.yml); both deployment paths override it for JVB with headroom, keeping `mode=1750,exec`.
+
 ### Settings for the image path
 
 `.env` takes the same settings as a `deployment.env`, with three differences, because no `scripts/meet` runs to derive anything:
