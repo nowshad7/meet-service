@@ -219,6 +219,7 @@ It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/
 | `MEET_APP_CONTROL_KEYS_URL` | Control-token public keys, for `control` |
 | `MEET_APP_PROXY_HOST`, `MEET_APP_PROXY_ALIAS` | For `app-proxy`: the host name of the app on the docker host, and the name Prosody uses for it (default `app.internal`) |
 | `MEET_CONTROL_BIND`, `MEET_CONTROL_PORT` | Where Prosody's HTTP port is published for control calls (default `127.0.0.1:5280`) |
+| `MEET_PRIVACY_AV_MODERATION` | `0` keeps media open in [privacy](features/privacy.md) rooms: participants unmute themselves, only the chat rules apply (default `1`) |
 | `MEET_TEXT_REMOVED`, `MEET_TEXT_PRIVATE_CHAT_ONLY`, `MEET_TEXT_PUBLIC_CHAT_OFF`, `MEET_TEXT_SEAT_REPLACED` | Optional wording for the notices users see; the defaults say "meeting" and "moderators" |
 | `XMPP_MODULES`, `XMPP_MUC_MODULES` | Upstream modules to load; `scripts/meet` appends the plugins according to `MEET_PLUGINS` |
 

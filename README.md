@@ -71,7 +71,7 @@ Set the switch shown below, then `docker compose up -d`.
 | [Room gate](docs/features/room-gate.md) | `MEET_PLUGINS=room-gate` | Your app approves or refuses every room before it opens |
 | [Events](docs/features/events.md) | `MEET_PLUGINS=events` | Server-side attendance: room and participant webhooks |
 | [Control](docs/features/control.md) | `MEET_PLUGINS=control` | Remove a user (with ban), let them back, end a meeting |
-| [Privacy](docs/features/privacy.md) | `MEET_PLUGINS=privacy` | Participants muted until approved, chat to moderators only |
+| [Privacy](docs/features/privacy.md) | `MEET_PLUGINS=privacy` | Chat to moderators only; participants muted until approved, or free to unmute with `MEET_PRIVACY_AV_MODERATION=0` |
 | [Single session](docs/features/single-session.md) | `MEET_PLUGINS=single-session` | One seat per user across tabs and devices |
 | [Recording](docs/features/recording.md) | `MEET_FEATURES=recording` | Jibri recordings uploaded to your app with retries |
 | [Transcription pilot](docs/features/transcription.md) | `MEET_FEATURES=transcription` with a private Whisper URL | Legacy Jigasi live captions; Bangla recognition unverified |
