@@ -77,6 +77,7 @@ So there are two gates.
 - **Join token: may this person enter this room?** Prosody verifies the RS256 token on every join.
 
 The room gate is what makes the app authoritative rather than advisory.
+Because only the app's signed links open a room, the web defaults (`web/custom-config.js`) switch off Jitsi's invite and add-people dialogs with `disableInviteFunctions`: they would only hand out a bare room URL.
 
 ## Join flow
 

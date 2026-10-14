@@ -15,6 +15,10 @@ config.constraints = {
 
 config.enableClosePage = true;
 
+// Rooms are entered with the app's signed join links only, so Jitsi's invite
+// and add-people dialogs would hand out a bare room URL that cannot join.
+config.disableInviteFunctions = true;
+
 config.localRecording = { disable: true };
 
 // The live-caption pilot recognizes source speech only.

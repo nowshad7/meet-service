@@ -38,6 +38,17 @@ describe("mod_meet_privacy", function()
         assert.is_false(room._data.av_can_unmute)
     end)
 
+    it("keeps media open but chat closed when the deployment turns media moderation off", function()
+        world = fake.new({ options = { meet_privacy_av_moderation = false } }).load("mod_meet_privacy")
+        join("host", "moderator", { privacy = true })
+        local guest, session = join("guest", "participant", {})
+
+        assert.is_true(room._data.meet_privacy)
+        assert.is_nil(room._data.av_can_unmute)
+        assert.is_true(groupchat(guest, session))
+        assert.equal("In this meeting, messages go to the moderators only.", session.sent[1].error.text)
+    end)
+
     it("keeps the first decision for the room", function()
         join("u1", "moderator", { privacy = true })
         join("u2", "participant", { privacy = false })

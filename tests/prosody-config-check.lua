@@ -19,6 +19,7 @@ if os.getenv("CHECK_CASE") == "all-set" then
     expect(config.get("*", "reservations_api_headers").Authorization, "Bearer test-token", "room gate header")
     expect(config.get("*", "prosody_password_public_key_repo_url"), "http://app.internal/control-keys", "control keys")
     expect(config.get("*", "meet_control_removed_notice"), "Removed.", "removed notice")
+    expect(config.get("*", "meet_privacy_av_moderation"), false, "privacy media switch")
     expect(config.get("events.example.org", "component_module"), "meet_events", "events component")
     expect(config.get("events.example.org", "muc_component"), "muc.example.org", "events muc")
     expect(config.get("events.example.org", "breakout_component"), "breakout.example.org", "events breakout")
@@ -29,6 +30,7 @@ else
     expect(config.get("*", "reservations_api_headers"), nil, "room gate header")
     expect(config.get("*", "prosody_password_public_key_repo_url"), nil, "control keys")
     expect(config.get("*", "meet_control_removed_notice"), nil, "removed notice")
+    expect(config.get("*", "meet_privacy_av_moderation"), true, "privacy media default")
     expect(config.get("events.meet.jitsi", "component_module"), nil, "events component")
 end
 
