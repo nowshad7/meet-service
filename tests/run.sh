@@ -44,6 +44,9 @@ tests/finalize-test.sh
 step scripts/meet
 tests/meet-test.sh
 
+step web config defaults
+run_tool node node:22-alpine --test tests/web-config.test.mjs
+
 step transcription language bridge
 run_tool node node:22-alpine --test tests/transcription-language.test.mjs
 
