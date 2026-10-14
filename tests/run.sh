@@ -68,6 +68,9 @@ tests/contract-check.py "$samples"
 step prosody config fragments
 tests/prosody-config-check.sh
 
+step Jicofo leaves room roles to the token
+tests/jicofo-roles-check.sh
+
 step transcription generated config
 tests/transcription-config-check.sh
 

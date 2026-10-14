@@ -39,6 +39,7 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
 - `context.user.id` is the stable user id.
   Attendance webhooks, single-session and removal all key on it, so set it on every token, guests included.
 - Optional user claims: `email`, `avatar`, `moderator`, `affiliation` (`owner`, `moderator` or `teacher` make a moderator), `lobby_bypass`.
+  These claims are the only source of room roles; a token without them joins as a participant (see [room roles](../docs/deploy.md#room-roles)).
 - Optional `context.group` and `context.features.*` (`recording`, `screen-sharing`, `transcription`, `livestreaming`, `outbound-call`).
 - Optional room block `context.room`:
 

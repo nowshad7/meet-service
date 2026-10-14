@@ -110,7 +110,7 @@ The same 16 MiB limit exists in the pinned [upstream docker-jitsi-meet defaults]
 | `control` | `muc_end_meeting,meet_control` appended to `XMPP_MODULES` |
 | `single-session` | `meet_single_session` appended to `XMPP_MUC_MODULES` |
 | `privacy` | `meet_privacy` appended to `XMPP_MUC_MODULES` |
-| `AUTH_TYPE=jwt` | `JWT_ASAP_KEYSERVER=${MEET_APP_KEYS_URL}` and `XMPP_MUC_CONFIGURATION` as in `env.example` |
+| `AUTH_TYPE=jwt` | `JWT_ASAP_KEYSERVER=${MEET_APP_KEYS_URL}`, `XMPP_MUC_CONFIGURATION` as in `env.example`, and `JICOFO_ENABLE_AUTH=0` (see [Room roles](#room-roles)) |
 
 Keep `MEET_PLUGINS` itself in `.env`: the stack check reads it to know what must be loaded, which catches a plugin listed there but missing from the derived settings.
 `scripts/meet env <name>` in a checkout prints the derived values for an existing `deployment.env`, which is the quickest way to move a deployment to the image path.
@@ -228,6 +228,22 @@ Do not set `JWT_ASAP_KEYSERVER`, `PROSODY_RESERVATION_*`, `ENABLE_RECORDING`, `J
 `secrets.env` lives only on the server and is gitignored.
 `secrets.env.example` lists the names: the XMPP component passwords and `MEET_APP_API_TOKEN`.
 `init` generates any that are empty and never overwrites a value; regenerating XMPP passwords on a live stack would desync Prosody from Jicofo and JVB.
+
+## Room roles
+
+Who is a moderator comes from the join token only: upstream `token_affiliation` in `XMPP_MUC_MODULES` reads the token's `moderator` or `affiliation` claim, and Prosody enforces it.
+Jicofo must not grant roles of its own, so JWT deployments set:
+
+```bash
+ENABLE_AUTO_OWNER=false
+JICOFO_ENABLE_AUTH=0
+```
+
+The pinned docker-jitsi-meet turns Jicofo authentication on whenever `ENABLE_AUTH=1` (`JICOFO_ENABLE_AUTH` defaults to `ENABLE_AUTH`).
+With `AUTH_TYPE=jwt` Jicofo then counts every user who joined with a token as authenticated and makes them an owner, so every participant becomes a moderator who can mute others, remove them and end the meeting, whatever the token says.
+Switching Jicofo authentication off does not weaken the join check: Prosody still verifies every token, and `ENABLE_GUESTS=0` keeps anyone without one out.
+`scripts/meet` sets `JICOFO_ENABLE_AUTH=0` for `AUTH_TYPE=jwt` unless `deployment.env` sets it; on the image path, set it in `.env` as `deploy/env.example` does.
+`tests/jicofo-roles-check.sh` renders the pinned Jicofo config for every shipped deployment and fails if authentication is on.
 
 ## TLS
 
