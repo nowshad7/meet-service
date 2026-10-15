@@ -30,6 +30,14 @@ services:
       - JIGASI_TRANSCRIBER_PASSWORD
       - XMPP_HIDDEN_DOMAIN
   transcriber:
+    # meet-jigasi: the pinned Jigasi with the per-speaker audio buffer patch (images/jigasi).
+    image: ${MEET_JIGASI_IMAGE:-meet.local/meet-jigasi:dev}
+    build:
+      context: ${MEET_ROOT}
+      dockerfile: images/Dockerfile
+      target: jigasi
+      args:
+        UPSTREAM_VERSION: ${JITSI_IMAGE_VERSION}
     depends_on:
       prosody:
         condition: service_healthy
