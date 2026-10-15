@@ -145,6 +145,8 @@ derive_plugin_settings() {
 
   if [[ "${AUTH_TYPE:-}" == jwt ]]; then
     require_settings JWT_APP_ID MEET_APP_KEYS_URL
+    # Jicofo's JWT authentication makes every token holder an owner; roles come from the token.
+    export JICOFO_ENABLE_AUTH="${JICOFO_ENABLE_AUTH:-0}"
     export JWT_ASAP_KEYSERVER="$MEET_APP_KEYS_URL"
     local token_settings="app_id = \"$JWT_APP_ID\",asap_key_server = \"$MEET_APP_KEYS_URL\",token_verification_allowlist = { \"${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}\" }"
     export XMPP_MUC_CONFIGURATION="$token_settings${XMPP_MUC_CONFIGURATION:+,$XMPP_MUC_CONFIGURATION}"
@@ -348,7 +350,7 @@ cmd_env() {
   for name in COMPOSE_PROJECT_NAME MEET_DEPLOYMENT_DIR CONFIG JITSI_IMAGE_VERSION MEET_FEATURES MEET_PLUGINS MEET_EVENTS \
               XMPP_MODULES XMPP_MUC_MODULES XMPP_MUC_CONFIGURATION JWT_ASAP_KEYSERVER \
               PROSODY_RESERVATION_ENABLED PROSODY_RESERVATION_REST_BASE_URL \
-              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST \
+              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST JICOFO_ENABLE_AUTH \
               MEET_TRANSCRIPTION_ENABLED ENABLE_TRANSCRIPTIONS JIGASI_XMPP_USER JIGASI_TRANSCRIBER_USER JIGASI_BREWERY_MUC; do
     echo "$name=${!name:-}"
   done

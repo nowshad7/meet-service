@@ -4,7 +4,9 @@
 --   * Media: sets av_can_unmute=false so mod_av_moderation_component turns on
 --     audio/video/desktop moderation when the first moderator joins. Jicofo
 --     then keeps every participant muted at the bridge until a moderator
---     approves them ("give the stage").
+--     approves them ("give the stage"). meet_privacy_av_moderation = false
+--     leaves media alone, so participants unmute themselves while moderators
+--     keep mute, camera-off and kick.
 --   * Chat: participants cannot post to the group chat, and may send private
 --     messages to moderators only.
 -- Separately, context.room.publicChat == false turns off participants'
@@ -21,6 +23,7 @@ local CHAT_NOTICE = module:get_option_string("meet_privacy_chat_notice",
     "In this meeting, messages go to the moderators only.");
 local PUBLIC_CHAT_OFF_NOTICE = module:get_option_string("meet_privacy_public_chat_off_notice",
     "Group chat is off for participants. Send a private message instead.");
+local AV_MODERATION = module:get_option_boolean("meet_privacy_av_moderation", true);
 
 local function is_moderator(room, nick)
     local occupant = nick and room:get_occupant_by_nick(nick);
@@ -41,7 +44,7 @@ module:hook("muc-occupant-pre-join", function(event)
 
     room._data.meet_privacy = context_room.privacy == true;
     room._data.meet_no_public_chat = context_room.publicChat == false;
-    if room._data.meet_privacy then
+    if room._data.meet_privacy and AV_MODERATION then
         room._data.av_can_unmute = false;
         module:log("info", "privacy mode on for %s", room.jid);
     end

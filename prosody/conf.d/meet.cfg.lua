@@ -16,6 +16,7 @@ prosody_password_public_key_repo_url = setting("MEET_APP_CONTROL_KEYS_URL")
 meet_control_removed_notice = setting("MEET_TEXT_REMOVED")
 meet_privacy_chat_notice = setting("MEET_TEXT_PRIVATE_CHAT_ONLY")
 meet_privacy_public_chat_off_notice = setting("MEET_TEXT_PUBLIC_CHAT_OFF")
+meet_privacy_av_moderation = setting("MEET_PRIVACY_AV_MODERATION") ~= "0"
 meet_single_session_notice = setting("MEET_TEXT_SEAT_REPLACED")
 
 meet_transcription_enabled = setting("MEET_TRANSCRIPTION_ENABLED") == "1"

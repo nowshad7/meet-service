@@ -39,12 +39,13 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
 - `context.user.id` is the stable user id.
   Attendance webhooks, single-session and removal all key on it, so set it on every token, guests included.
 - Optional user claims: `email`, `avatar`, `moderator`, `affiliation` (`owner`, `moderator` or `teacher` make a moderator), `lobby_bypass`.
+  These claims are the only source of room roles; a token without them joins as a participant (see [room roles](../docs/deploy.md#room-roles)).
 - Optional `context.group` and `context.features.*` (`recording`, `screen-sharing`, `transcription`, `livestreaming`, `outbound-call`).
 - Optional room block `context.room`:
 
 | Field | Effect | Needs plugin |
 |---|---|---|
-| `privacy: true` | Participants stay muted until a moderator approves them; they cannot post to the group chat and may send private messages to moderators only | `privacy` |
+| `privacy: true` | Participants stay muted until a moderator approves them, unless the deployment sets `MEET_PRIVACY_AV_MODERATION=0`; they cannot post to the group chat and may send private messages to moderators only | `privacy` |
 | `publicChat: false` | Participants cannot post to the group chat; private messages stay open | `privacy` |
 | `lobby_autostart: false` | The lobby does not switch on automatically for this room | upstream `token_lobby_autostart` |
 | `transcription` | `{enabled, language, autoStart, save}` for live captions | [transcription pilot](../docs/features/transcription.md); uses `enabled` and `language` (`bn`/`en`), ignores `autoStart`/`save` |

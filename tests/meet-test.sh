@@ -44,6 +44,7 @@ expect "PROSODY_RESERVATION_REST_BASE_URL=https://app.example.org/meet/api"
 expect "ENABLE_RECORDING=1"
 expect "JIBRI_FINALIZE_RECORDING_SCRIPT_PATH=/usr/local/bin/meet-finalize.sh"
 expect "JICOFO_ENABLE_REST=1"
+expect "JICOFO_ENABLE_AUTH=0"
 expect "compose $WORK/compose/recording.yml"
 grep -q "test-secret" <<<"$actual" && fail "env must not print secrets"
 
@@ -63,12 +64,21 @@ fill_secrets "$PRIVATE/acme"
 if private_meet env acme 2>"$WORK/err"; then fail "unknown plugin should be refused"; fi
 grep -qF "unknown plugin 'nope'" "$WORK/err" || fail "should name the unknown plugin"
 
+sed -i 's/^MEET_PLUGINS=.*/MEET_PLUGINS=privacy/; /^JICOFO_ENABLE_AUTH=/d' "$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "JICOFO_ENABLE_AUTH=0"
+echo "JICOFO_ENABLE_AUTH=1" >>"$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "JICOFO_ENABLE_AUTH=1"
+sed -i '/^JICOFO_ENABLE_AUTH=/d' "$PRIVATE/acme/deployment.env"
+
 sed -i 's/^MEET_PLUGINS=.*/MEET_PLUGINS=privacy/; s/^AUTH_TYPE=.*/AUTH_TYPE=internal/' "$PRIVATE/acme/deployment.env"
 actual="$(cd "$WORK" && MEET_DEPLOYMENTS_DIR=private-deployments scripts/meet env acme)"
 expect "MEET_DEPLOYMENT_DIR=$PRIVATE/acme"
 expect "MEET_EVENTS=0"
 expect "XMPP_MODULES=muc_size,persistent_lobby"
 expect "XMPP_MUC_CONFIGURATION="
+expect "JICOFO_ENABLE_AUTH="
 
 sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=app-proxy/' "$PRIVATE/acme/deployment.env"
 if private_meet env acme 2>"$WORK/err"; then fail "app-proxy without MEET_APP_PROXY_HOST should be refused"; fi
