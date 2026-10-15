@@ -17,7 +17,7 @@ try {
     step = 'gateway_config';
     const options = { log, prewarmLanguage: process.env.MEET_STT_PREWARM_LANGUAGE ?? '' };
     for (const [key, env] of Object.entries({ windowMs: 'WINDOW_MS', overlapMs: 'OVERLAP_MS',
-        idleMs: 'IDLE_MS', timeoutMs: 'TIMEOUT_MS', maxQueue: 'MAX_QUEUE', maxSpeakers: 'MAX_SPEAKERS',
+        idleMs: 'IDLE_MS', streamIdleMs: 'STREAM_IDLE_MS', timeoutMs: 'TIMEOUT_MS', maxQueue: 'MAX_QUEUE', maxSpeakers: 'MAX_SPEAKERS',
         maxConnections: 'MAX_CONNECTIONS', maxActiveCalls: 'MAX_ACTIVE_CALLS' })) {
         if (process.env['MEET_STT_' + env]) options[key] = Number(process.env['MEET_STT_' + env]);
     }

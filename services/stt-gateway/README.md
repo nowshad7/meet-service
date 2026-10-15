@@ -51,7 +51,8 @@ Its errors are discarded too.
 |---|---:|---|
 | `MEET_STT_WINDOW_MS` | 3000 | PCM window; maximum 30000 ms |
 | `MEET_STT_OVERLAP_MS` | 500 | Prefix retained between windows; less than window |
-| `MEET_STT_IDLE_MS` | 1500 | No incoming audio before finalization |
+| `MEET_STT_IDLE_MS` | 1500 | No incoming audio before a batch provider finalizes |
+| `MEET_STT_STREAM_IDLE_MS` | 700 | No incoming audio before a continuous provider gets `endAudio` (Jitsi sends no packets in silence); 700 ms brought sung-phrase finals from 2.15 s to 1.39 s (p50) with Gemini 3.5 Transcribe Live |
 | `MEET_STT_TIMEOUT_MS` | 10000 | Abort a provider call and discard its late results |
 | `MEET_STT_MAX_ACTIVE_CALLS` | 32 | Global in-flight provider calls, including abandoned calls |
 | `MEET_STT_MAX_QUEUE` | 4 | Waiting jobs per speaker, excluding the active call |
@@ -88,7 +89,7 @@ Call `onResult({ text, isFinal, variance })` as recognition arrives, with the sa
 `onEvent(name, fields)` adds a line to the gateway's timing log; the gateway keeps only numbers and short tokens from `fields` and adds the room and a speaker hash.
 An interim is the complete current utterance, not a new fragment; a final commits that utterance in Jigasi.
 The gateway never sends empty text to clear captions.
-Idle and EOF call `endAudio`; language changes close the old stream and open a new one with the new hint.
+Idle (`MEET_STT_STREAM_IDLE_MS`) and EOF call `endAudio`; language changes close the old stream and open a new one with the new hint.
 Disconnect calls `close` and suppresses later callbacks.
 Invalid results and synchronous provider failures are discarded without exposing error content.
 `MEET_STT_MAX_ACTIVE_CALLS` also caps open continuous streams globally; batch and streaming are selected per process.

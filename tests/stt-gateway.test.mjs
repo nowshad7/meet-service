@@ -14,7 +14,7 @@ function frame(id, lang, audio = Buffer.alloc(32000)) {
     return Buffer.concat([header, audio]);
 }
 async function fixture(t, provider = createProvider(), options = {}) {
-    const gateway = createGateway(provider, { windowMs: 1000, overlapMs: 250, idleMs: 100, ...options });
+    const gateway = createGateway(provider, { windowMs: 1000, overlapMs: 250, idleMs: 100, streamIdleMs: 100, ...options });
     gateway.server.listen(0, '127.0.0.1');
     await once(gateway.server, 'listening');
     t.after(() => gateway.close());

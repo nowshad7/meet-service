@@ -30,7 +30,8 @@ const shortId = value => createHash('sha256').update(String(value)).digest('hex'
 
 export function createGateway(provider, options = {}) {
     const { log = () => {}, prewarmLanguage = '', ...settings } = options;
-    const config = { windowMs: 3000, overlapMs: 500, idleMs: 1500, timeoutMs: 10000,
+    // Streaming providers end an utterance sooner after a pause than a batch window needs.
+    const config = { windowMs: 3000, overlapMs: 500, idleMs: 1500, streamIdleMs: 700, timeoutMs: 10000,
         maxQueue: 4, maxActiveCalls: 32, maxSpeakers: 100, maxConnections: 20, ...settings };
     for (const [key, value] of Object.entries(config)) {
         if (!Number.isSafeInteger(value) || value < (key === 'overlapMs' ? 0 : 1)) throw new Error('invalid_config');
@@ -194,7 +195,7 @@ export function createGateway(provider, options = {}) {
                 clearTimeout(s.idle);
                 if (typeof provider.openStream === 'function') {
                     writeStream(s, frame.audio);
-                    s.idle = setTimeout(() => flush(s), config.idleMs);
+                    s.idle = setTimeout(() => flush(s), config.streamIdleMs);
                     return;
                 }
                 s.buffer = Buffer.concat([s.buffer, frame.audio]);
