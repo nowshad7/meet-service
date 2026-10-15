@@ -19,4 +19,5 @@ meet_privacy_public_chat_off_notice = setting("MEET_TEXT_PUBLIC_CHAT_OFF")
 meet_privacy_av_moderation = setting("MEET_PRIVACY_AV_MODERATION") ~= "0"
 meet_single_session_notice = setting("MEET_TEXT_SEAT_REPLACED")
 
-meet_transcription_enabled = setting("MEET_TRANSCRIPTION_ENABLED") == "1"
+local transcription = setting("MEET_TRANSCRIPTION_ENABLED")
+meet_transcription_enabled = transcription == "1" or transcription == "true"

@@ -38,6 +38,28 @@ services:
       - "5280"
     ports:
       - "${MEET_CONTROL_BIND:-127.0.0.1}:${MEET_CONTROL_PORT:-5280}:5280"
+    environment:
+      # The caption permission gate is always loaded; it denies every request
+      # unless ENABLE_TRANSCRIPTIONS=1 and the room's token entitles it.
+      - XMPP_MUC_MODULES=${XMPP_MUC_MODULES:-},meet_transcription
+      - MEET_TRANSCRIPTION_ENABLED=${ENABLE_TRANSCRIPTIONS:-0}
+    healthcheck:
+      # With captions on, also wait until upstream has registered both Jigasi
+      # accounts, so the transcriber's first login does not race them.
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -o /dev/null http://127.0.0.1:5280/health && case "$${ENABLE_TRANSCRIPTIONS:-0}" in
+          1|true|TRUE|True)
+          prosodyctl --config /run/prosody/config/prosody.cfg.lua shell user list "$${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}"
+          | grep -qxF "$${JIGASI_XMPP_USER:-jigasi}@$${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}"
+          && prosodyctl --config /run/prosody/config/prosody.cfg.lua shell user list "$${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}"
+          | grep -qxF "$${JIGASI_TRANSCRIBER_USER:-transcriber}@$${XMPP_HIDDEN_DOMAIN:-hidden.meet.jitsi}" ;;
+          esac
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     volumes:
       - ${CONFIG:-./data}/prosody/config:/config:Z
       - ${CONFIG:-./data}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
@@ -91,6 +113,51 @@ services:
       - ${CONFIG:-./data}/storage/jibri:/storage:Z
     depends_on:
       - jicofo
+
+  # Live captions (docs/features/transcription.md): COMPOSE_PROFILES=transcription
+  # and ENABLE_TRANSCRIPTIONS=1. The gateway alone reads the provider keys.
+  stt-gateway:
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-stt-gateway:${MEET_VERSION:?set MEET_VERSION in .env}
+    profiles:
+      - transcription
+    restart: ${RESTART_POLICY:-unless-stopped}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file:
+      - .env
+      - stt-secrets.env
+    environment:
+      - MEET_STT_PROVIDER_MODULE=${MEET_STT_PROVIDER_MODULE:-/app/gemini-transcribe-live.mjs}
+    networks:
+      meet.jitsi:
+
+  transcriber:
+    <<: *service
+    image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jigasi:${MEET_VERSION:?set MEET_VERSION in .env}
+    profiles:
+      - transcription
+    tmpfs:
+      - /run:size=16M,mode=1750,exec
+      - /tmp:size=128M,mode=1777,noexec
+    # Live captions only: no transcript files, audio recording or translation.
+    environment:
+      - JIGASI_MODE=transcriber
+      - JIGASI_TRANSCRIBER_CUSTOM_SERVICE=org.jitsi.jigasi.transcription.WhisperTranscriptionService
+      - JIGASI_TRANSCRIBER_WHISPER_URL=ws://stt-gateway:8000/streaming-whisper/ws
+      - JIGASI_TRANSCRIBER_ENABLE_SAVING=false
+      - JIGASI_TRANSCRIBER_RECORD_AUDIO=false
+      - JIGASI_TRANSCRIBER_ADVERTISE_URL=false
+      - JIGASI_TRANSCRIBER_ENABLE_TRANSLATION=false
+      - SENTRY_DSN=${JIGASI_SENTRY_DSN:-0}
+    volumes:
+      - ${CONFIG:-./data}/transcriber:/config:Z
+      - ${CONFIG:-./data}/storage/transcripts:/tmp/transcripts:z
+    depends_on:
+      prosody:
+        condition: service_healthy
+      stt-gateway:
+        condition: service_healthy
 
   app-proxy:
     image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-app-proxy:${MEET_VERSION:?set MEET_VERSION in .env}

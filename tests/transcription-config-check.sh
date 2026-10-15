@@ -58,7 +58,8 @@ python3 - "$WORK/compose.json" "$VERSION" <<'PY'
 import json, sys
 services = json.load(open(sys.argv[1]))['services']
 t = services['transcriber']
-assert t['image'] == 'ghcr.io/jitsi/jigasi:' + sys.argv[2]
+assert t['image'] == 'meet.local/meet-jigasi:dev'
+assert t['build']['target'] == 'jigasi' and t['build']['args']['UPSTREAM_VERSION'] == sys.argv[2]
 assert t['depends_on']['prosody']['condition'] == 'service_healthy'
 assert 'shell user list' in services['prosody']['healthcheck']['test'][1]
 assert t['environment']['JIGASI_MODE'] == 'transcriber'
@@ -95,5 +96,38 @@ assert g['environment']['MEET_STT_PROVIDER_MODULE'] == '/app/gemini.mjs'
 assert not g.get('volumes') and not g.get('ports')
 assert not g['environment'].get('GEMINI_API_KEY')
 assert services['transcriber']['depends_on']['stt-gateway']['condition'] == 'service_healthy'
+PYCODE
+# The release compose wires the same pieces behind the transcription profile.
+cp -R "$ROOT/deploy" "$WORK/release"
+cp "$WORK/release/env.example" "$WORK/release/.env"
+cp "$WORK/release/secrets.env.example" "$WORK/release/secrets.env"
+cp "$WORK/release/stt-secrets.env.example" "$WORK/release/stt-secrets.env"
+sed -i 's/^ENABLE_TRANSCRIPTIONS=.*/ENABLE_TRANSCRIPTIONS=1/' "$WORK/release/.env"
+printf 'GEMINI_API_KEY=test-only-key\n' >"$WORK/release/stt-secrets.env"
+printf 'JIGASI_XMPP_PASSWORD=test-brewery-password\n' >>"$WORK/release/secrets.env"
+COMPOSE_PROFILES=transcription docker compose --project-directory "$WORK/release" config --format json >"$WORK/release.json"
+python3 - "$WORK/release.json" <<'PYCODE'
+import json, sys
+services = json.load(open(sys.argv[1]))['services']
+g, t, p = services['stt-gateway'], services['transcriber'], services['prosody']
+assert g['image'].endswith('/meet-stt-gateway:1.0.0') and not g.get('ports') and g['read_only']
+assert g['environment']['MEET_STT_PROVIDER_MODULE'] == '/app/gemini-transcribe-live.mjs'
+assert g['environment']['GEMINI_API_KEY'] == 'test-only-key'
+assert 'JIGASI_XMPP_PASSWORD' not in g['environment'], 'gateway must not read the XMPP secrets'
+for name, service in services.items():
+    if name != 'stt-gateway':
+        assert 'GEMINI_API_KEY' not in service.get('environment', {}), name + ' must not see provider keys'
+assert t['image'].endswith('/meet-jigasi:1.0.0')
+assert t['environment']['JIGASI_MODE'] == 'transcriber'
+assert t['environment']['JIGASI_TRANSCRIBER_WHISPER_URL'] == 'ws://stt-gateway:8000/streaming-whisper/ws'
+assert t['environment']['JIGASI_TRANSCRIBER_ENABLE_SAVING'] == 'false'
+assert t['environment']['JIGASI_XMPP_PASSWORD'] == 'test-brewery-password'
+assert t['depends_on']['prosody']['condition'] == 'service_healthy'
+assert t['depends_on']['stt-gateway']['condition'] == 'service_healthy'
+assert p['environment']['XMPP_MUC_MODULES'].endswith(',meet_transcription')
+assert p['environment']['MEET_TRANSCRIPTION_ENABLED'] == '1'
+assert 'shell user list' in p['healthcheck']['test'][1]
+for service in ['web', 'jicofo']:
+    assert services[service]['environment']['ENABLE_TRANSCRIPTIONS'] == '1'
 PYCODE
 printf 'transcription generated config: ok\n'
