@@ -2,7 +2,7 @@
 
 `MEET_FEATURES=transcription` opts a deployment into a legacy Jigasi live-caption pilot on `stable-11146-2`.
 Use the source workflow (`scripts/meet`) for this pilot; the standalone `deploy/compose.yml` release workflow does not yet include it.
-It activates with either a nonempty private `JIGASI_TRANSCRIBER_WHISPER_URL` or a configured `MEET_STT_PROVIDER_MODULE` (bundled Gemini or a mounted private provider).
+It activates with either a nonempty private `JIGASI_TRANSCRIBER_WHISPER_URL` or a configured `MEET_STT_PROVIDER_MODULE` (bundled Gemini batch/Live or a mounted private provider).
 With neither configured, or with the feature absent, it adds no transcriber, gateway or transcription overlay and leaves normal deployment behavior unchanged.
 
 ## What it does
@@ -47,7 +47,7 @@ The upstream Prosody initializer creates matching brewery and hidden participant
 Configure the URL in the private deployment's `deployment.env` and any provider key in its uncommitted `secrets.env`.
 No provider key, model file or provider secret belongs in the repository or images.
 An external backend must implement Jigasi's streaming Whisper protocol.
-Alternatively use the generic gateway below to adapt a privately supplied batch speech provider.
+Alternatively use the generic gateway below to adapt a batch or continuous speech provider.
 Provider credentials and deployment-specific model selection stay in the private deployment; the Gemini adapter is open source.
 
 ## Internal gateway and providers
@@ -69,14 +69,15 @@ Add any provider-specific environment/secrets through the private deployment's `
 
 `scripts/meet` adds `compose/stt-gateway.yml` only when transcription and a module are configured, and sets Jigasi's URL to `ws://stt-gateway:8000/streaming-whisper/ws`.
 Private modules also require a provider directory and add `compose/stt-provider.yml` for its read-only mount.
-The bundled Gemini module requires no directory or mount.
+The bundled Gemini batch and Live modules require no directory or mount.
 A configured module takes precedence over an external backend URL.
 Without a module the previous external backend route remains available.
 The gateway has no published host port; Jigasi waits for its readiness check.
 Use `MEET_STT_GATEWAY_IMAGE` to select a privately deployed core image instead of the local default.
 The release bake includes a `stt-gateway` target; the standalone release compose still does not wire transcription.
 
-By default the gateway submits 3-second PCM windows with 500 ms overlap, preserving each speaker's header language.
+For batch providers the gateway submits 3-second PCM windows with 500 ms overlap, preserving each speaker's header language.
+Continuous providers receive each frame immediately through the optional stream interface.
 Each provider handles speech/silence boundaries, overlap reconciliation, and interim/final text.
 Queues, speaker counts and room connections are bounded; slow providers are aborted after 10 seconds and excess audio is dropped.
 Provider failures affect captions rather than the meeting transport.
@@ -138,6 +139,74 @@ The model default follows the deployment requirement; model availability was not
 A successful uploaded-file transcription does not establish live caption performance with short, overlapping speaker windows.
 Test representative Bangla/English classes, code-switching, quiet speech, boundary words and concurrent speakers before wider deployment.
 
+## Gemini Live provider
+
+Select this module instead of the batch provider in the private deployment's `deployment.env`:
+
+```sh
+MEET_FEATURES=transcription
+MEET_STT_PROVIDER_MODULE=/app/gemini-live.mjs
+GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-latest
+```
+
+Keep `GEMINI_API_KEY` in the deployment's uncommitted `secrets.env`, as for the batch provider.
+No provider directory is required.
+The gateway image bundles both adapters and can be selected with `MEET_STT_GATEWAY_IMAGE`.
+The Live model setting is separate from `GEMINI_MODEL`, which continues to select the batch model.
+
+The provider opens one authenticated Live WebSocket per speaker and streams headerless PCM16 little-endian mono at 16 kHz in at most 100 ms chunks.
+The pinned Jigasi capture device already produces this format; no resampling or WAV wrapping is needed.
+`inputTranscription.text` fragments extend one accumulated interim caption, so Jigasi keeps its utterance ID and previous words remain visible.
+A server `turnComplete` schedules a final after a short grace period, which late input fragments extend.
+Google documents no guaranteed ordering between input transcription and turn events, so this grace is a heuristic; delayed fragments can still become a new utterance.
+Gateway idle/EOF sends `audioStreamEnd`; subsequent PCM reopens input on the same session.
+The provider does not infer utterance boundaries from client-side silence or clear captions with empty text.
+First caption startup still includes network setup and the model's first-token delay.
+
+Native audio requires the `AUDIO` response modality.
+A system instruction asks it to listen silently and never reply, with a default maximum of 32 output tokens.
+All generated audio, output transcription and tool calls are discarded; none is decoded, played, stored or forwarded.
+These controls do not guarantee zero output generation or zero output charges.
+Cost per minute is unmeasured.
+
+| Setting | Default | Meaning |
+|---|---:|---|
+| `GEMINI_LIVE_MODEL` | `gemini-2.5-flash-native-audio-latest` | Live model name |
+| `GEMINI_LIVE_MAX_STREAMS` | 32 | Provider session cap, also subject to the gateway global cap |
+| `GEMINI_LIVE_MAX_QUEUE_MS` | 5000 | Unsent PCM retained during setup/reconnect; oldest audio drops at the limit |
+| `GEMINI_LIVE_SETUP_TIMEOUT_MS` | 10000 | Connect/setup deadline |
+| `GEMINI_LIVE_STALL_MS` | 30000 | No input transcription while nonzero PCM is pending before reconnect |
+| `GEMINI_LIVE_RECONNECT_MS` | 500 | Initial exponential backoff, capped at 5 seconds |
+| `GEMINI_LIVE_SESSION_MS` | 540000 | Proactive connection rotation; maximum 840000 |
+| `GEMINI_LIVE_FINAL_GRACE_MS` | 350 | Delay after an API boundary for late input fragments |
+| `GEMINI_LIVE_MAX_OUTPUT_TOKENS` | 32 | Generated response token cap |
+
+All limits are positive integers; millisecond limits other than session rotation are at most 60000, and counts/token caps are at most 4096.
+Setup completion is required before sending audio; startup audio is held only within the bounded queue.
+Session resumption handles and sliding-window context compression are enabled; GoAway or scheduled rotation reconnects using the last resumable handle.
+Without a usable handle the provider commits the current caption and starts a fresh session.
+Auth/policy/quota failures and more than five consecutive unsuccessful recoveries impose a 60-second cooldown.
+A successful input transcription resets the recovery count.
+Sent audio is never replayed because realtime frames have no individual acknowledgement; unsent audio is retained within the queue limit.
+Words in flight during a broken connection can be lost; recovery is best effort, not lossless.
+All failures remain confined to captions and no native errors, URLs, credentials, audio or transcript text enter provider logs.
+
+The [WebSocket guide](https://ai.google.dev/gemini-api/docs/live-api/get-started-websocket) documents the v1beta endpoint, query-key authentication and PCM framing.
+The [Live API reference](https://ai.google.dev/api/live) documents setup, input transcription, `audioStreamEnd`, turn completion and resumption updates.
+The [session guide](https://ai.google.dev/gemini-api/docs/live-api/session-management) documents connection limits, resumption, compression and GoAway.
+These sources were checked on 2026-10-08.
+Fake-WebSocket tests cover framing, caption accumulation, boundaries, bounded startup queues, reconnect and private-error handling.
+A single isolated 64-second Bangla Jitsi/Jigasi playback on 2026-10-08 yielded 196 input fragments, 190 containing one word, with a median 189 ms fragment interval.
+The first API fragment arrived 5.471 seconds after browser playback began, including 2.849 seconds before the gateway's first outgoing PCM, and 2.622 seconds after that PCM began.
+No generated reply audio was observed with the silent instruction and 32-token cap in that pass.
+That first run's UI instrumentation was invalid.
+A corrected second playback captured 201 visible text changes with a median 192 ms interval; 100 of 104 positive displayed word-count increases added one word.
+Its first visible caption arrived 10.239 seconds after speech playback began, including 7.538 seconds before Jigasi supplied PCM; the first API fragment arrived 2.650 seconds after PCM began and rendered 51 ms later.
+This observed initial caption was slower than the supplied 7–9-second batch baseline, which was not independently replayed.
+The provider improves update cadence; faster initial end-to-end captions are not guaranteed.
+Per-word speech-to-caption latency requires spoken-word alignment and was not measured.
+Human-rated accuracy, long sessions, many concurrent speakers and cost per minute remain unverified.
+
 ## Contract
 
 An entitled join token includes this context:
@@ -168,6 +237,6 @@ End-to-end encrypted audio cannot be recognized by a server transcriber.
 It verifies WebSocket connectivity and result parsing with a fake provider, without joining a meeting.
 These checks verify wiring and simulated client/server behavior, not recognition quality or a live meeting.
 
-Live Bangla captions have **not been tested end to end**.
-Bangla accuracy, same-speaker code-switching, latency and concurrent-class capacity are unmeasured.
+Two isolated Bangla playbacks exercised streaming recognition, with visible caption updates captured in the corrected second pass.
+Bangla accuracy, same-speaker code-switching, per-word speech-to-caption latency and concurrent-class capacity remain unmeasured.
 Evaluate real Bangladeshi classroom audio, speaker association, stop/restart, privacy rooms and poor microphones against the selected backend before making any wider support promise.

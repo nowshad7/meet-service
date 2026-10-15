@@ -6,7 +6,7 @@ try {
     if (!modulePath?.startsWith('/')) throw new Error('provider_required');
     const { createProvider } = await import(pathToFileURL(modulePath).href);
     const provider = await createProvider();
-    if (typeof provider.transcribe !== 'function') throw new Error('invalid_provider');
+    if (typeof provider.transcribe !== 'function' && typeof provider.openStream !== 'function') throw new Error('invalid_provider');
     const options = {};
     for (const [key, env] of Object.entries({ windowMs: 'WINDOW_MS', overlapMs: 'OVERLAP_MS',
         idleMs: 'IDLE_MS', timeoutMs: 'TIMEOUT_MS', maxQueue: 'MAX_QUEUE', maxSpeakers: 'MAX_SPEAKERS',

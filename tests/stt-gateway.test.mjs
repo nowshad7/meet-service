@@ -146,3 +146,23 @@ test('uncancellable calls retain a global slot across disconnects; session state
     next.send(frame('same', 'en')); await until(() => calls.length === 2);
     assert.notEqual(calls[0].sessionId, calls[1].sessionId);
 });
+
+test('continuous provider receives small PCM frames immediately and callbacks keep Jigasi utterances', async t => {
+    const writes = [], ended = [], closed = [];
+    let emit;
+    const { ws, messages } = await fixture(t, { openStream(job) {
+        emit = job.onResult;
+        return { write(audio) { writes.push(audio); }, endAudio() { ended.push(true); }, close() { closed.push(true); } };
+    } });
+    const pcm = Buffer.from([1, 2, 3, 4]);
+    ws.send(frame('a', 'bn', pcm));
+    await until(() => writes.length === 1);
+    assert.deepEqual(writes[0], pcm);
+    emit({ text: 'সে', isFinal: false }); emit({ text: 'সে তো', isFinal: false });
+    emit({ text: 'সে তো', isFinal: true });
+    await until(() => messages.length === 3);
+    assert.deepEqual(messages.map(x => JSON.parse(x).type), ['interim', 'interim', 'final']);
+    await until(() => ended.length === 1);
+    ws.terminate(); await until(() => closed.length === 1);
+    emit({ text: 'late', isFinal: true }); assert.equal(messages.length, 3);
+});
