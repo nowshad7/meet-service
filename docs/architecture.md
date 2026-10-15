@@ -48,7 +48,7 @@ flowchart TB
 | App proxy | `services/app-proxy/` + `compose/app-proxy.yml` | Optional nginx that lets Prosody reach an app on the docker host |
 | Web | `web/` + `deployments/<name>/brand/` | Behaviour config, landing page, close page, branding |
 
-Upstream is never patched or forked.
+Upstream is never forked, and patched in one place only: `meet-jigasi` replaces Jigasi's per-speaker audio buffer class for faster live captions ([images/jigasi](../images/jigasi/README.md)).
 On a checkout, the plugins are mounted read-only into `/prosody-plugins-custom`, which upstream Prosody already searches first.
 The release images add them to upstream's own `/prosody-plugins/` instead, leaving `/prosody-plugins-custom` free for a deployment's own plugins.
 

@@ -12,7 +12,7 @@ You run it like any other dependency through a small, versioned [app contract](c
 
 ## Using the published Docker images
 
-Every release publishes six images under one version, all built on the same pinned Jitsi release (see [UPSTREAM_VERSION](UPSTREAM_VERSION)).
+Every release publishes eight images under one version, all built on the same pinned Jitsi release (see [UPSTREAM_VERSION](UPSTREAM_VERSION)).
 Pull them as `ghcr.io/nowshad7/meet-<service>:<version>`.
 
 | Image | Built on | Adds |
@@ -22,6 +22,8 @@ Pull them as `ghcr.io/nowshad7/meet-<service>:<version>`.
 | `ghcr.io/nowshad7/meet-jicofo` | `ghcr.io/jitsi/jicofo` | Jicofo's REST API switched on, for health checks |
 | `ghcr.io/nowshad7/meet-jvb` | `ghcr.io/jitsi/jvb` | Nothing; published so one version pins every service |
 | `ghcr.io/nowshad7/meet-jibri` | `ghcr.io/jitsi/jibri` | The script that uploads finished recordings to your app |
+| `ghcr.io/nowshad7/meet-jigasi` | `ghcr.io/jitsi/jigasi` | The live-caption transcriber, with a faster per-speaker audio buffer ([the one patched class](images/jigasi/README.md)) |
+| `ghcr.io/nowshad7/meet-stt-gateway` | `node:22-alpine` | The internal speech-to-text gateway and its providers |
 | `ghcr.io/nowshad7/meet-app-proxy` | `nginx:alpine` | A proxy to an app running on the same docker host |
 
 - **Versions.** A release tag `vX.Y.Z` publishes every image as `X.Y.Z` and `latest`, for `linux/amd64` and `linux/arm64`.
@@ -74,7 +76,7 @@ Set the switch shown below, then `docker compose up -d`.
 | [Privacy](docs/features/privacy.md) | `MEET_PLUGINS=privacy` | Chat to moderators only; participants muted until approved, or free to unmute with `MEET_PRIVACY_AV_MODERATION=0` |
 | [Single session](docs/features/single-session.md) | `MEET_PLUGINS=single-session` | One seat per user across tabs and devices |
 | [Recording](docs/features/recording.md) | `MEET_FEATURES=recording` | Jibri recordings uploaded to your app with retries |
-| [Transcription pilot](docs/features/transcription.md) | `MEET_FEATURES=transcription` with a private Whisper URL | Legacy Jigasi live captions; Bangla recognition unverified |
+| [Live captions](docs/features/transcription.md) | `COMPOSE_PROFILES=transcription` (images) or `MEET_FEATURES=transcription` (checkout) | Streaming Bangla/English captions through Jigasi and Gemini or ElevenLabs, starting with the class |
 | [App proxy](docs/features/app-proxy.md) | `MEET_FEATURES=app-proxy` | Reach an app that runs on the same docker host |
 | Branding and wording | `brand/` in the deployment folder, `MEET_TEXT_*` | Your logo, colours, page titles and notices |
 

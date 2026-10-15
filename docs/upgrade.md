@@ -14,9 +14,10 @@ Deployments run a release: on published images by setting `MEET_VERSION`, from a
    - changes to the upstream Prosody modules the plugins depend on: `token_verification`, `room_metadata_component`, `muc_meeting_id`, `reservations` (read from the two Prosody images).
 
    It then writes `<tag>` to `UPSTREAM_VERSION`.
-3. Act on the report: rename settings in every `deployment.env` (including those in `MEET_DEPLOYMENTS_DIR`), in `deploy/env.example` and in the `.env` of every deployment on published images, adapt plugins, and regenerate any `lang/main.json` a deployment mounts from the new upstream file, reapplying its edits.
-4. Run `tests/run.sh`, then bring up a staging deployment and run `tests/stack-check.sh <name>` and the app's own checks.
-5. Merge only when everything passes, [cut a release](#cutting-a-release), roll out to staging, then to each deployment on its own schedule.
+3. If the Jigasi package in the new release differs from `images/jigasi/JIGASI_VERSION`, the `meet-jigasi` build fails on purpose: carry upstream's `Participant.java` changes into the patch as [its README](../images/jigasi/README.md#build-and-upgrade) describes.
+4. Act on the report: rename settings in every `deployment.env` (including those in `MEET_DEPLOYMENTS_DIR`), in `deploy/env.example` and in the `.env` of every deployment on published images, adapt plugins, and regenerate any `lang/main.json` a deployment mounts from the new upstream file, reapplying its edits.
+5. Run `tests/run.sh`, then bring up a staging deployment and run `tests/stack-check.sh <name>` and the app's own checks.
+6. Merge only when everything passes, [cut a release](#cutting-a-release), roll out to staging, then to each deployment on its own schedule.
 
 New upstream features arrive with the images.
 Exposing one to apps is a contract addition, which is a minor service release.
