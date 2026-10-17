@@ -91,7 +91,7 @@ acme/
    ```
 
 Every `docker compose` command works from the folder as usual: `logs -f prosody`, `restart web`, `down` (never `down -v`, it deletes all Jitsi state).
-From any checkout of this repository, `tests/stack-check.sh --dir /path/to/acme` checks health and that every plugin in `MEET_PLUGINS` is loaded and answering.
+From any checkout of this repository, `tests/stack-check.sh --dir /path/to/acme` checks health, that Jicofo sees every running recorder, and that every plugin in `MEET_PLUGINS` is loaded and answering.
 
 JVB uses an executable 64 MiB `/run` tmpfs because its launcher extracts the 16,284,272-byte native SCTP library into `/run/jvb/tmp`.
 The 16 MiB limit leaves too little space after runtime files and causes `UnsatisfiedLinkError: no dcsctp4j` when participants connect.
@@ -103,7 +103,7 @@ The same 16 MiB limit exists in the pinned [upstream docker-jitsi-meet defaults]
 
 | Instead of | Set in `.env` |
 |---|---|
-| `MEET_FEATURES=recording` | `COMPOSE_PROFILES=recording`, `ENABLE_RECORDING=1`, `ENABLE_SERVICE_RECORDING=1` |
+| `MEET_FEATURES=recording` | `COMPOSE_PROFILES=recording`, `ENABLE_RECORDING=1`, `ENABLE_SERVICE_RECORDING=1`, and `MEET_RECORDERS` for more than one recorder |
 | `MEET_FEATURES=app-proxy` | `COMPOSE_PROFILES=app-proxy` and `MEET_APP_PROXY_HOST` (both features: `COMPOSE_PROFILES=recording,app-proxy`) |
 | `MEET_FEATURES=transcription` | `COMPOSE_PROFILES=transcription`, `ENABLE_TRANSCRIPTIONS=1`, `closedcaptions` in `TOOLBAR_BUTTONS`, and the provider key in `stt-secrets.env`; the compose file derives the rest (see [live captions](features/transcription.md#release-deployment)) |
 | `scripts/meet` deriving the plugin settings | The derived values themselves, per plugin below |
@@ -200,7 +200,7 @@ Every command reads the deployment from that folder, including its `compose.yml`
 | `scripts/meet init <name>` | Creates `secrets.env` from `secrets.env.example`, fills only empty values, creates the data tree, fetches upstream |
 | `scripts/meet up <name> [service...]` | Builds the brand directory and starts the deployment; extra arguments go to `docker compose up -d` |
 | `scripts/meet down <name>` | Stops it; `-v` is refused because it deletes all Jitsi state |
-| `scripts/meet health <name>` | Container state, Prosody and JVB health, an operational bridge in Jicofo |
+| `scripts/meet health <name>` | Container state, Prosody and JVB health, an operational bridge in Jicofo and, with `recording`, `MEET_RECORDERS` recorders |
 | `scripts/meet logs <name> [args]` | `docker compose logs` for the deployment, e.g. `logs acme -f prosody` |
 | `scripts/meet env <name>` | Prints the derived upstream settings and compose files, never secrets |
 | `scripts/meet compose <name> [args]` | Any other `docker compose` command, e.g. `compose acme restart web` |
@@ -219,6 +219,7 @@ It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/
 |---|---|
 | `MEET_FEATURES` | Optional containers: `recording`, `app-proxy`, `transcription` (see [live captions](features/transcription.md)) |
 | `MEET_PLUGINS` | `events`, `room-gate`, `control`, `single-session`, `privacy` |
+| `MEET_RECORDERS` | With `recording`: recorders, one per simultaneous recording (default `1`, see [recording](features/recording.md#several-recorders)) |
 | `MEET_APP_API_URL` | Base URL of the app's endpoints (room gate, webhooks, recordings) |
 | `MEET_APP_KEYS_URL` | Join-token public keys; becomes `JWT_ASAP_KEYSERVER` and the MUC `asap_key_server` |
 | `MEET_APP_CONTROL_KEYS_URL` | Control-token public keys, for `control` |

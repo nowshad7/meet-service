@@ -46,10 +46,19 @@ expect "PROSODY_RESERVATION_ENABLED=1"
 expect "PROSODY_RESERVATION_REST_BASE_URL=https://app.example.org/meet/api"
 expect "ENABLE_RECORDING=1"
 expect "JIBRI_FINALIZE_RECORDING_SCRIPT_PATH=/usr/local/bin/meet-finalize.sh"
+expect "MEET_RECORDERS=1"
 expect "JICOFO_ENABLE_REST=1"
 expect "JICOFO_ENABLE_AUTH=0"
 expect "compose $WORK/compose/recording.yml"
 grep -q "test-secret" <<<"$actual" && fail "env must not print secrets"
+
+echo "MEET_RECORDERS=3" >>"$WORK/deployments/example-production/deployment.env"
+actual="$(meet env example-production)"
+expect "MEET_RECORDERS=3"
+echo "MEET_RECORDERS=0" >>"$WORK/deployments/example-production/deployment.env"
+if meet env example-production 2>"$WORK/err"; then fail "MEET_RECORDERS=0 should be refused"; fi
+grep -qF "MEET_RECORDERS must be a whole number" "$WORK/err" || fail "should name the bad recorder count"
+sed -i '/^MEET_RECORDERS=/d' "$WORK/deployments/example-production/deployment.env"
 
 actual="$(meet env example)"
 expect "MEET_FEATURES="
@@ -175,6 +184,7 @@ cat >"$WORK/bin/docker" <<'DOCKER'
 #!/usr/bin/env bash
 case "$*" in
   *" logs "*) yes "jicofo log line, Added new videobridge" | head -n 200000; exit ;;
+  *" exec -T jicofo "*jibri_detector*) echo "$FAKE_JIBRI_STATS"; exit ;;
   *" exec -T jicofo "*) exit "$FAKE_JICOFO_STATUS" ;;
 esac
 exit 0
@@ -185,5 +195,12 @@ health_example 0 || fail "health should pass when jicofo reports an operational 
 grep -qxF "jicofo: OK, a bridge is operational" "$WORK/health.log" || fail "health should report the operational bridge"
 if health_example 1; then fail "health should fail without an operational bridge"; fi
 grep -qxF "jicofo: no operational videobridge" "$WORK/health.log" || fail "health should name the missing bridge"
+
+health_recording() { PATH="$WORK/bin:$PATH" FAKE_JICOFO_STATUS=0 FAKE_JIBRI_STATS="$1" meet health example-production >"$WORK/health.log" 2>&1; }
+echo "MEET_RECORDERS=3" >>"$WORK/deployments/example-production/deployment.env"
+health_recording $'3\t2' || fail "health should pass when every recorder is registered, got:"$'\n'"$(<"$WORK/health.log")"
+grep -qxF "jibri: OK, 3/3 recorders registered, 2 available" "$WORK/health.log" || fail "health should report the recorders"
+if health_recording $'1\t1'; then fail "health should fail when recorders are missing from jicofo"; fi
+grep -qxF "jibri: 1 of 3 recorders registered in jicofo" "$WORK/health.log" || fail "health should name the missing recorders"
 
 echo "scripts/meet: ok"

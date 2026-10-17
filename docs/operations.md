@@ -29,7 +29,8 @@ scripts/meet logs acme -f jicofo jvb
 | Removals, bans | `prosody`: `mod_meet_control` |
 | No bridge, conference allocation | `jicofo` |
 | ICE failures, one-way media | `jvb`, and `JVB_ADVERTISE_IPS` |
-| Recording uploads | `/storage/logs/recording-finalize.log` in `jibri` |
+| Recording uploads | `/storage/logs/recording-finalize.log` in `jibri`, shared by all recorders |
+| A recorder missing or busy | `jibri`, and `jibri_detector` in Jicofo's `/stats` |
 
 Docker keeps container logs with its default driver; configure log rotation in `/etc/docker/daemon.json` on long-running hosts.
 
@@ -59,7 +60,8 @@ scripts/meet compose acme exec jibri /usr/local/bin/meet-finalize.sh /storage/re
 ```
 
 Watch disk space on the recordings volume; one hour of 720p is roughly 0.5 to 1 GB.
-One Jibri records one meeting at a time, so run one per concurrent recording with `scripts/meet up acme --scale jibri=N`.
+One Jibri records one meeting at a time, so set `MEET_RECORDERS` to the number of simultaneous recordings; [recording](features/recording.md#several-recorders) lists what each one needs from the host.
+`scripts/meet health acme` reports how many recorders Jicofo sees and how many are idle.
 
 ## Restarting and updating settings
 
