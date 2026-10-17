@@ -1,6 +1,7 @@
 .upstream/
 .data/
 secrets.env
+stt-secrets.env
 *.tar.gz
 node_modules/
 

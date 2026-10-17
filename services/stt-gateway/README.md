@@ -1,11 +1,11 @@
 # Speech provider interface
 
-The gateway contains transport, scheduling and the optional open-source Gemini batch and Live providers.
+The gateway contains transport, scheduling and the open-source providers: Gemini 3.5 Transcribe Live (the default), ElevenLabs Scribe v2 Realtime, Gemini Live and Gemini batch.
 It imports the absolute `MEET_STT_PROVIDER_MODULE` path at startup and calls its exported `createProvider()` once, awaiting the result.
 Startup fails with a generic message if no usable provider is selected.
-Set `MEET_STT_PROVIDER_MODULE=/app/gemini.mjs` to select the bundled Gemini provider,
+Set `MEET_STT_PROVIDER_MODULE` to `/app/gemini-transcribe-live.mjs`, `/app/elevenlabs.mjs`, `/app/gemini-live.mjs` or `/app/gemini.mjs`,
 or mount a private module under `/provider`. The image contains no credentials.
-See [Gemini setup and limitations](../../docs/features/transcription.md#gemini-provider).
+See [providers, setup and limitations](../../docs/features/transcription.md#internal-gateway-and-providers).
 
 A batch provider implements:
 
@@ -51,14 +51,17 @@ Its errors are discarded too.
 |---|---:|---|
 | `MEET_STT_WINDOW_MS` | 3000 | PCM window; maximum 30000 ms |
 | `MEET_STT_OVERLAP_MS` | 500 | Prefix retained between windows; less than window |
-| `MEET_STT_IDLE_MS` | 1500 | No incoming audio before finalization |
+| `MEET_STT_IDLE_MS` | 1500 | No incoming audio before a batch provider finalizes |
+| `MEET_STT_STREAM_IDLE_MS` | 700 | No incoming audio before a continuous provider gets `endAudio` (Jitsi sends no packets in silence); 700 ms brought sung-phrase finals from 2.15 s to 1.39 s (p50) with Gemini 3.5 Transcribe Live |
 | `MEET_STT_TIMEOUT_MS` | 10000 | Abort a provider call and discard its late results |
 | `MEET_STT_MAX_ACTIVE_CALLS` | 32 | Global in-flight provider calls, including abandoned calls |
 | `MEET_STT_MAX_QUEUE` | 4 | Waiting jobs per speaker, excluding the active call |
 | `MEET_STT_MAX_SPEAKERS` | 100 | Speaker states per connection |
 | `MEET_STT_MAX_CONNECTIONS` | 20 | Concurrent room connections |
+| `MEET_STT_PREWARM_LANGUAGE` | empty | Language of the connection pre-opened for a room before anyone has spoken; empty uses the language last heard, so the first room after a restart opens none |
+| `MEET_STT_LOG` | on | `0` turns off the timing log lines |
 
-All settings are integer values; overlap may be zero, other settings must be positive.
+The numeric settings are integers; overlap may be zero, other settings must be positive.
 The WebSocket message limit is 30 seconds of PCM plus its header.
 The service listens on port 8000 and serves `/health` for readiness.
 The compose overlay publishes no host port and uses the private Jitsi network.
@@ -72,19 +75,21 @@ When present, it takes precedence over `transcribe`; the existing batch interfac
 The gateway passes each incoming PCM frame immediately, with no windows or overlap.
 
 ```js
-openStream({ sessionId, participantId, language, sampleRate, onResult }) {
+openStream({ sessionId, participantId, language, sampleRate, onResult, onEvent }) {
     return {
         write(audio) { /* synchronously accept a PCM Buffer into a bounded queue */ },
         endAudio() { /* signal idle/EOF; later write calls reopen audio */ },
         close() { /* cancel timers, network and queues synchronously */ }
     };
 }
+prepare({ sessionId, language }) { /* optional: open a connection before any audio */ }
 ```
 
-Call `onResult({ text, isFinal, variance })` as recognition arrives, with the same result contract as batch calls.
+Call `onResult({ text, isFinal, variance })` as recognition arrives, with the same result contract as batch calls, and without batching or throttling interims.
+`onEvent(name, fields)` adds a line to the gateway's timing log; the gateway keeps only numbers and short tokens from `fields` and adds the room and a speaker hash.
 An interim is the complete current utterance, not a new fragment; a final commits that utterance in Jigasi.
 The gateway never sends empty text to clear captions.
-Idle and EOF call `endAudio`; language changes close the old stream and open a new one with the new hint.
+Idle (`MEET_STT_STREAM_IDLE_MS`) and EOF call `endAudio`; language changes close the old stream and open a new one with the new hint.
 Disconnect calls `close` and suppresses later callbacks.
 Invalid results and synchronous provider failures are discarded without exposing error content.
 `MEET_STT_MAX_ACTIVE_CALLS` also caps open continuous streams globally; batch and streaming are selected per process.
@@ -92,6 +97,11 @@ Streaming providers own startup deadlines, reconnection and bounded queues rathe
 No per-speaker departure frame exists, so idle speaker streams occupy a slot until language change or room disconnect.
 The same speaker/room caps and slow caption consumer limit apply.
 
-Select `/app/gemini-live.mjs` for the bundled continuous Gemini implementation.
-It uses the existing PCM bytes without resampling because the pinned Jigasi capture device already emits exactly the required format.
-See [Live configuration and limitations](../../docs/features/transcription.md#gemini-live-provider).
+The gateway calls the optional `prepare` when Jigasi connects for a room (before anyone has spoken) and after each new speaker's stream opens, with the language last heard or `MEET_STT_PREWARM_LANGUAGE`.
+A provider may keep one connection ready per `sessionId` for the next `openStream` with that language, and must release it in `releaseSession`.
+
+`realtime.mjs` is the shared core of the bundled continuous providers.
+An adapter supplies `connect(language, handlers)` for its vendor's wire format, and the core provides the bounded per-speaker queue, reconnects with backoff, pre-opened connections and overlapping session rotation: the next session opens while the current one streams, audio switches once it is ready, and the old session's caption finishes before the new one's is shown.
+Private providers can import it from `/app/realtime.mjs`.
+The bundled adapters use the PCM bytes without resampling because the pinned Jigasi capture device already emits exactly the required format.
+See [provider configuration and limitations](../../docs/features/transcription.md#internal-gateway-and-providers).

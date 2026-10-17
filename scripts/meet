@@ -10,6 +10,7 @@ DEPLOYMENTS_DIR="${MEET_DEPLOYMENTS_DIR:-$ROOT/deployments}"
 KNOWN_FEATURES="recording app-proxy transcription"
 KNOWN_PLUGINS="events room-gate control single-session privacy"
 GENERATED_SECRET_BYTES=24
+BUNDLED_STT_PROVIDERS="/app/gemini-transcribe-live.mjs /app/elevenlabs.mjs /app/gemini-live.mjs /app/gemini.mjs"
 UPGRADE_WATCHED_MODULES="token_verification room_metadata_component muc_meeting_id reservations"
 
 usage() {
@@ -157,8 +158,8 @@ derive_feature_settings() {
   export MEET_TRANSCRIPTION_ENABLED=0
   export MEET_STT_GATEWAY_ENABLED=0
   if has_item "$MEET_FEATURES" transcription && [[ -n "${MEET_STT_PROVIDER_MODULE:-}" ]]; then
-    if [[ "$MEET_STT_PROVIDER_MODULE" != /app/gemini.mjs && "$MEET_STT_PROVIDER_MODULE" != /app/gemini-live.mjs ]]; then
-      [[ "$MEET_STT_PROVIDER_MODULE" == /provider/* ]] || die "MEET_STT_PROVIDER_MODULE must be /app/gemini.mjs, /app/gemini-live.mjs or under /provider/"
+    if [[ " $BUNDLED_STT_PROVIDERS " != *" $MEET_STT_PROVIDER_MODULE "* ]]; then
+      [[ "$MEET_STT_PROVIDER_MODULE" == /provider/* ]] || die "MEET_STT_PROVIDER_MODULE must be one of $BUNDLED_STT_PROVIDERS or under /provider/"
       require_settings MEET_STT_PROVIDER_DIR
       [[ "$MEET_STT_PROVIDER_DIR" == /* ]] || die "MEET_STT_PROVIDER_DIR must be absolute"
     fi

@@ -23,7 +23,7 @@ group "default" {
 
 target "meet" {
   name       = "${service}"
-  matrix     = { service = ["prosody", "web", "jicofo", "jvb", "jibri", "app-proxy"] }
+  matrix     = { service = ["prosody", "web", "jicofo", "jvb", "jibri", "jigasi", "app-proxy"] }
   context    = "."
   dockerfile = "images/Dockerfile"
   target     = service

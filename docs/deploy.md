@@ -22,7 +22,7 @@ To test from another device on your network, add the host's LAN address, for exa
 
 ## Deploy from published images
 
-A release tag `vX.Y.Z` publishes six images, all built on the same pinned Jitsi release (`UPSTREAM_VERSION`) and tagged `X.Y.Z` and `latest`:
+A release tag `vX.Y.Z` publishes eight images, all built on the same pinned Jitsi release (`UPSTREAM_VERSION`) and tagged `X.Y.Z` and `latest`:
 
 | Image | Built on | Adds |
 |---|---|---|
@@ -31,9 +31,12 @@ A release tag `vX.Y.Z` publishes six images, all built on the same pinned Jitsi 
 | `meet-jicofo` | `ghcr.io/jitsi/jicofo` | `JICOFO_ENABLE_REST=1` |
 | `meet-jvb` | `ghcr.io/jitsi/jvb` | Nothing; published so one version pins every service |
 | `meet-jibri` | `ghcr.io/jitsi/jibri` | The recording finalize script, set as `JIBRI_FINALIZE_RECORDING_SCRIPT_PATH` |
+| `meet-jigasi` | `ghcr.io/jitsi/jigasi` | The live-only transcription properties and [one patched class](../images/jigasi/README.md), the per-speaker audio buffer |
+| `meet-stt-gateway` | `node:22-alpine` | The [speech-to-text gateway](../services/stt-gateway/README.md) and its providers |
 | `meet-app-proxy` | `nginx:alpine` | The app proxy config |
 
-Nothing upstream is patched: the images only add files, and a small start-up step copies the config defaults to where the upstream start-up scripts already look for `/config` overrides.
+The images only add files, and a small start-up step copies the config defaults to where the upstream start-up scripts already look for `/config` overrides.
+The one exception is `meet-jigasi`, which replaces a single upstream class to make live captions about 1.4 s faster; its build fails if the pinned Jigasi changes underneath it.
 The images appear on GHCR with the first release tag, `v1.0.0`; until then, build them locally as described in [upgrade.md](upgrade.md#cutting-a-release).
 
 ### The deployment folder
@@ -45,6 +48,7 @@ acme/
   compose.yml           deploy/compose.yml from the release you run, unchanged
   .env                  settings, from deploy/env.example; commit it to your private repository
   secrets.env           generated once on the server, never committed
+  stt-secrets.env       live captions only: the speech-to-text provider key, read by stt-gateway alone
   brand/                files that replace or add to the default brand
   compose.override.yml  optional: your own mounts, for example lang/main.json or landing/
   data/                 runtime data (CONFIG), created on the server
@@ -74,7 +78,7 @@ acme/
 3. Create the data tree for the user the images run as (uid 1000):
 
    ```bash
-   mkdir -p data/{web,jicofo,jvb,jibri} data/prosody/{config,prosody-plugins-custom} \
+   mkdir -p data/{web,jicofo,jvb,jibri,transcriber} data/prosody/{config,prosody-plugins-custom} \
      data/storage/{web,prosody,transcripts,jibri/logs,jibri/recordings} data/tmp/web-load-test
    sudo chown -R 1000:1000 data
    ```
@@ -101,6 +105,7 @@ The same 16 MiB limit exists in the pinned [upstream docker-jitsi-meet defaults]
 |---|---|
 | `MEET_FEATURES=recording` | `COMPOSE_PROFILES=recording`, `ENABLE_RECORDING=1`, `ENABLE_SERVICE_RECORDING=1` |
 | `MEET_FEATURES=app-proxy` | `COMPOSE_PROFILES=app-proxy` and `MEET_APP_PROXY_HOST` (both features: `COMPOSE_PROFILES=recording,app-proxy`) |
+| `MEET_FEATURES=transcription` | `COMPOSE_PROFILES=transcription`, `ENABLE_TRANSCRIPTIONS=1`, `closedcaptions` in `TOOLBAR_BUTTONS`, and the provider key in `stt-secrets.env`; the compose file derives the rest (see [live captions](features/transcription.md#release-deployment)) |
 | `scripts/meet` deriving the plugin settings | The derived values themselves, per plugin below |
 
 | `MEET_PLUGINS` entry | Also set |
@@ -212,7 +217,7 @@ It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/
 
 | Setting | Meaning |
 |---|---|
-| `MEET_FEATURES` | Optional containers: `recording`, `app-proxy`, `transcription` (source workflow only; see [pilot setup](features/transcription.md)) |
+| `MEET_FEATURES` | Optional containers: `recording`, `app-proxy`, `transcription` (see [live captions](features/transcription.md)) |
 | `MEET_PLUGINS` | `events`, `room-gate`, `control`, `single-session`, `privacy` |
 | `MEET_APP_API_URL` | Base URL of the app's endpoints (room gate, webhooks, recordings) |
 | `MEET_APP_KEYS_URL` | Join-token public keys; becomes `JWT_ASAP_KEYSERVER` and the MUC `asap_key_server` |

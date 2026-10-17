@@ -14,7 +14,7 @@ function frame(id, lang, audio = Buffer.alloc(32000)) {
     return Buffer.concat([header, audio]);
 }
 async function fixture(t, provider = createProvider(), options = {}) {
-    const gateway = createGateway(provider, { windowMs: 1000, overlapMs: 250, idleMs: 100, ...options });
+    const gateway = createGateway(provider, { windowMs: 1000, overlapMs: 250, idleMs: 100, streamIdleMs: 100, ...options });
     gateway.server.listen(0, '127.0.0.1');
     await once(gateway.server, 'listening');
     t.after(() => gateway.close());
@@ -165,4 +165,47 @@ test('continuous provider receives small PCM frames immediately and callbacks ke
     await until(() => ended.length === 1);
     ws.terminate(); await until(() => closed.length === 1);
     emit({ text: 'late', isFinal: true }); assert.equal(messages.length, 3);
+});
+
+test('timing log carries events, numbers and hashed IDs only, never text, audio or IDs', async t => {
+    const lines = [];
+    let emit;
+    const secret = 'সে তো private words';
+    const { ws, messages } = await fixture(t, { openStream(job) {
+        emit = job.onResult;
+        job.onEvent('provider_ready', { ms: 42, warm: 0, reason: secret, text: 'x' });
+        return { write() {}, endAudio() {}, close() {} };
+    } }, { log: line => lines.push(line) });
+    ws.send(frame('participant-abc', 'bn', Buffer.alloc(640)));
+    await until(() => emit);
+    emit({ text: secret, isFinal: false });
+    await until(() => messages.length === 1);
+    ws.close(); await until(() => lines.some(l => l.includes('event=room_close')));
+    const log = lines.join('\n');
+    for (const name of ['room_open', 'first_audio', 'stream_open', 'provider_ready', 'first_result', 'stream_close', 'room_close']) {
+        assert.match(log, new RegExp(`event=${name}\\b`));
+    }
+    assert.match(log, /event=provider_ready .*ms=42/);
+    assert.match(log, /event=first_result .*type=interim/);
+    assert.ok(!log.includes('participant-abc') && !log.includes('private') && !log.includes('সে'));
+    assert.match(log, /speaker=[0-9a-f]{8}\b/);
+});
+
+test('streaming provider is prepared when Jigasi connects, in the language last heard', async t => {
+    const prepared = [];
+    const provider = { prepare(job) { prepared.push(job); },
+        openStream() { return { write() {}, endAudio() {}, close() {} }; } };
+    const { ws, gateway } = await fixture(t, provider, { prewarmLanguage: 'en' });
+    await until(() => prepared.length === 1);
+    assert.equal(prepared[0].language, 'en');
+    ws.send(frame('a', 'bn', Buffer.alloc(640)));
+    await until(() => prepared.length === 2);
+    assert.deepEqual([prepared[1].sessionId, prepared[1].language], [prepared[0].sessionId, 'bn']);
+    const next = new WebSocket(`ws://127.0.0.1:${gateway.server.address().port}/streaming-whisper/ws/second`);
+    await once(next, 'open');
+    await until(() => prepared.length === 3);
+    assert.equal(prepared[2].language, 'bn');
+    assert.notEqual(prepared[2].sessionId, prepared[0].sessionId);
+    next.close();
+    assert.throws(() => createGateway(provider, { prewarmLanguage: '../x' }));
 });

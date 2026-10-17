@@ -7,6 +7,7 @@ Bug reports, documentation fixes, new tests and focused features are all welcome
 
 - For anything bigger than a small fix, open an issue first so we can agree on the approach.
 - Keep the core rule: no fork and no patches to the upstream Jitsi images.
+  The single exception is the audio buffer class in [`meet-jigasi`](images/jigasi/README.md); do not add others.
   New behaviour is a Prosody plugin, a config fragment, a compose override or a script, switched on per deployment by a setting.
 - Keep the service product-neutral.
   Anything specific to one app or company belongs in that deployment's folder, not in the shared code.

@@ -29,5 +29,26 @@ FROM ghcr.io/jitsi/jibri:${UPSTREAM_VERSION} AS jibri
 ENV JIBRI_FINALIZE_RECORDING_SCRIPT_PATH=/usr/local/bin/meet-finalize.sh
 COPY --chmod=755 services/recording-finalize/finalize.sh /usr/local/bin/meet-finalize.sh
 
+# The one patched upstream image (see images/jigasi/README.md): Participant's
+# per-speaker audio buffer, compiled against and swapped into the pinned jar.
+FROM ghcr.io/jitsi/jigasi:${UPSTREAM_VERSION} AS jigasi
+ENV MEET_RUN_CONFIG=/run/jigasi/config
+COPY images/s6/ /etc/s6-overlay/
+COPY compose/transcription.properties /meet/defaults/config/custom-sip-communicator.properties
+COPY images/jigasi/ /tmp/meet-jigasi/
+USER root
+RUN set -eu; \
+    cd /tmp/meet-jigasi; \
+    actual="$(dpkg-query -W -f '${Version}' jigasi)"; \
+    if [ "$actual" != "$(cat JIGASI_VERSION)" ]; then \
+      echo "images/jigasi was written for jigasi $(cat JIGASI_VERSION), this base has $actual: re-check the patch" >&2; exit 1; \
+    fi; \
+    javac --release 17 -nowarn -cp "/usr/share/jigasi/jigasi.jar:/usr/share/jigasi/lib/*" -d classes \
+      src/org/jitsi/jigasi/transcription/*.java; \
+    cd classes; \
+    jar uf /usr/share/jigasi/jigasi.jar org/jitsi/jigasi/transcription/Participant*.class; \
+    cd /; rm -rf /tmp/meet-jigasi
+USER s6
+
 FROM nginx:alpine AS app-proxy
 COPY services/app-proxy/default.conf.template /etc/nginx/templates/default.conf.template

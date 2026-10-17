@@ -115,10 +115,14 @@ sed -i '/^MEET_STT_PROVIDER_DIR=/d' "$PRIVATE/acme/deployment.env"
 actual="$(private_meet env acme)"
 expect "compose $WORK/compose/stt-gateway.yml"
 grep -q 'compose/stt-provider.yml' <<<"$actual" && fail "built-in Gemini must not mount a private provider"
-sed -i 's|^MEET_STT_PROVIDER_MODULE=.*|MEET_STT_PROVIDER_MODULE=/app/gemini-live.mjs|' "$PRIVATE/acme/deployment.env"
-actual="$(private_meet env acme)"
-expect "compose $WORK/compose/stt-gateway.yml"
-grep -q 'compose/stt-provider.yml' <<<"$actual" && fail "built-in Gemini Live must not mount a private provider"
+for module in /app/gemini-live.mjs /app/gemini-transcribe-live.mjs /app/elevenlabs.mjs; do
+  sed -i "s|^MEET_STT_PROVIDER_MODULE=.*|MEET_STT_PROVIDER_MODULE=$module|" "$PRIVATE/acme/deployment.env"
+  actual="$(private_meet env acme)"
+  expect "compose $WORK/compose/stt-gateway.yml"
+  grep -q 'compose/stt-provider.yml' <<<"$actual" && fail "built-in $module must not mount a private provider"
+done
+sed -i 's|^MEET_STT_PROVIDER_MODULE=.*|MEET_STT_PROVIDER_MODULE=/app/unknown.mjs|' "$PRIVATE/acme/deployment.env"
+if private_meet env acme 2>/dev/null; then fail "an unbundled /app module must be refused"; fi
 sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=app-proxy/' "$PRIVATE/acme/deployment.env"
 actual="$(private_meet env acme)"
 expect "MEET_TRANSCRIPTION_ENABLED=0"

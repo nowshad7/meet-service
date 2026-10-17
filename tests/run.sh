@@ -21,6 +21,8 @@ check_deploy_compose() {
   cp "$dir/env.example" "$dir/.env"
   cp "$dir/secrets.env.example" "$dir/secrets.env"
   COMPOSE_PROFILES=recording,app-proxy docker compose --project-directory "$dir" config --quiet
+  cp "$dir/stt-secrets.env.example" "$dir/stt-secrets.env"
+  COMPOSE_PROFILES=recording,app-proxy,transcription docker compose --project-directory "$dir" config --quiet
   rm -rf "$dir"
 }
 
@@ -58,6 +60,9 @@ docker run --rm --entrypoint sh -v "$ROOT/tests:/source-tests:ro" \
 
 step pinned Jigasi gateway transport
 tests/stt-stack-check.sh
+
+step patched Jigasi audio buffer
+tests/jigasi-patch-check.sh
 
 step reference app
 run_tool node node:22-alpine --test --test-reporter=spec examples/app-node/app.test.mjs

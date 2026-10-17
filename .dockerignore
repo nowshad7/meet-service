@@ -3,5 +3,6 @@
 !prosody/
 !web/
 !services/
+!compose/transcription.properties
 
 **/node_modules

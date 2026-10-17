@@ -1,6 +1,7 @@
 # Pinned streaming protocol
 
-This gateway implements the bundled Jigasi adapter's wire protocol, with no upstream image patch.
+This gateway implements the bundled Jigasi adapter's wire protocol.
+`meet-jigasi`'s buffer patch changes only how often Jigasi sends frames (every 100 ms instead of 1.46 s), not their format.
 The reference commit is `e9a3acc139c14d4b512718fef08333416a8ec625`.
 
 | Wire behavior | Source |
