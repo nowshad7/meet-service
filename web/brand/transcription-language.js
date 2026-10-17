@@ -77,6 +77,10 @@
         if (previous.room === room && previous.requesting && !requesting && !(previous.transcribing && !transcribing)) {
             userStopped = true;
         }
+        // Turning captions back on lifts that choice, so a transcriber restart re-enables them.
+        if (requesting) {
+            userStopped = false;
+        }
         previous = { room, requesting, transcribing };
         if (requesting || userStopped) {
             return;

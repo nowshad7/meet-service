@@ -330,6 +330,7 @@ Human-rated accuracy, long sessions, many concurrent speakers and cost per minut
 - Captions show on stage: the first time, the script switches on the pinned client's "Show subtitles on stage" setting (otherwise captions appear only in the chat panel's closed captions tab).
   After that the user's own setting, kept in their browser, stands.
 - Each user can turn captions off and on again for themselves with the closed captions button; the script does not undo that.
+  With captions on stage the button toggles them directly (translation selection is switched off, so there is no language dialog); a user who turned them back on gets them again after a transcriber restart.
   A moderator turning captions off keeps the room's transcription request, so other participants keep their captions while the moderator is in the room.
 
 Auto-start requests captions exactly like the closed captions panel's Start, without a translation language.

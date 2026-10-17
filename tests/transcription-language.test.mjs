@@ -137,3 +137,43 @@ test('autoStart off or without the feature claim does nothing', () => {
         assert.equal(s.dispatched.length, 0);
     }
 });
+
+// What the pinned CC button dispatches with translation disabled: setRequestingSubtitles(on, on, null).
+const ccButton = on => ({ type: 'SET_REQUESTING_SUBTITLES', enabled: on, displaySubtitles: on, language: null });
+
+test('autoStart: a participant turns captions off and on again, and a later restart keeps them on', () => {
+    const s = autoSetup();
+    s.tick();
+    s.set({ 'features/transcribing': { isTranscribing: true } });
+    s.store.dispatch(ccButton(false));
+    s.tick();
+    s.store.dispatch(ccButton(true));
+    s.tick();
+    assert.equal(s.state['features/subtitles']._requestingSubtitles, true);
+    assert.deepEqual(s.dispatched.map(a => a.enabled), [true, false, true], 'no extra request from the script');
+    s.set({ 'features/transcribing': { isTranscribing: false }, 'features/subtitles': { _requestingSubtitles: false } });
+    s.set({ 'features/transcribing': { isTranscribing: true } });
+    assert.deepEqual(s.dispatched.map(a => a.enabled), [true, false, true, true]);
+});
+
+test('autoStart: a participant who keeps captions off stays off across a transcriber restart', () => {
+    const s = autoSetup();
+    s.tick();
+    s.set({ 'features/transcribing': { isTranscribing: true } });
+    s.store.dispatch(ccButton(false));
+    s.set({ 'features/transcribing': { isTranscribing: false } });
+    s.set({ 'features/transcribing': { isTranscribing: true } });
+    s.tick();
+    assert.deepEqual(s.dispatched.map(a => a.enabled), [true, false]);
+});
+
+test('autoStart: the moderator turning captions off and on keeps the room transcriber requested', () => {
+    const s = autoSetup({ role: 'moderator' });
+    s.tick();
+    s.set({ 'features/transcribing': { isTranscribing: true } });
+    s.store.dispatch(ccButton(false));
+    s.store.dispatch(ccButton(true));
+    const requests = s.presence.filter(([name]) => name === 'requestingTranscription').map(([, value]) => value);
+    assert.deepEqual(requests, [true, true]);
+    assert.equal(s.state['features/subtitles']._requestingSubtitles, true);
+});
