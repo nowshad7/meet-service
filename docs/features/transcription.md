@@ -356,7 +356,27 @@ End-to-end encrypted audio cannot be recognized by a server transcriber.
 
 ## Latency
 
-LATENCY_PLACEHOLDER
+Measured on 2026-10-15 to 2026-10-17 on an isolated stack built from this tree (localhost, one laptop), with the method of the 1.3.0 measurement: the student's browser sings a vocals-only Bangla song from a fake microphone, the moderator's browser receives captions on stage, timing only.
+Gated runs cut the song into 16 sung bursts with 6 s of silence after each, so every burst's lag can be read separately.
+1.3.0 is the same measurement on the 1.3.0 stack (stock Jigasi, Gemini 3.5 Transcribe Live as a test module, captions started by hand).
+
+| Stage | 1.3.0 | Now: Gemini 3.5 Transcribe Live | Now: ElevenLabs Scribe v2 Realtime |
+|---|---:|---:|---:|
+| Moderator joins → transcriber in the room | captions started by hand | 0.6–0.8 s, before anyone speaks | same |
+| Speech onset → PCM at the gateway | 1.3 s | 0.0 s (within the first 100 ms; stock Jigasi in the same stack: 1.24 s) | 0.0 s |
+| Provider connection set-up for the first speaker | in the first-caption time | 0 ms (pre-opened) | 0.55–0.67 s (pre-opening off by default) |
+| Gateway PCM → first caption message | | 1.27–1.34 s | 2.35–2.52 s |
+| Message → caption in the page | 6–20 ms | 1–3 ms | 1–2 ms |
+| **Speech onset → first visible caption** | **4.0–8.7 s** | **1.15–1.23 s** (5 runs) | **2.17–2.39 s** (3 runs) |
+| **Per-word lag p50 / p90** (gated) | **1.9 / 3.1 s** | **1.34 / 2.39 s** (default settings; 1.11–1.35 / 2.39–2.90 s over 4 runs) | **0.91 / 2.25 s** (0.76 / 2.17 s with the 1.5 s idle) |
+| Phrase start → first words p50 / p90 | 2.9 / 4.3 s | 2.37 / 3.33 s | 1.89 / 3.28 s |
+| Phrase end → last words p50 / p90 | 0.9 / 1.7 s | 0.47 / 1.32 s | −0.08 / 0.60 s |
+| Phrase end → final caption p50 / p90 | 1.4 / 2.1 s | 1.32 / 1.58 s (2.15 / 2.31 s with the 1.5 s idle) | 1.40 / 1.66 s (2.17 / 2.44 s with the 1.5 s idle) |
+| Caption messages | about one per 1.4 s | about one per 1.0 s | about one per 1.0 s |
+
+With the stock Jigasi image in the same stack, Gemini's per-word lag was 1.76 / 3.07 s and the first caption 1.87 s, so the buffer patch accounts for about 0.4 s of per-word lag and 0.7 s of first caption.
+The gateway forwards every result (152 sent for 134 received in one run, the rest after recording stopped), and Jigasi, Prosody and the web client add no throttle: the remaining one-per-second cadence is how often the providers send interim text.
+Sung audio, one speaker, a few runs per setting; accuracy and cost per minute were not measured.
 
 ## Tests
 
