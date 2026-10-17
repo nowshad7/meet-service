@@ -142,6 +142,39 @@ describe('reference app', () => {
     assert.equal(unsafe.status, 400);
   });
 
+  it('stores a finished transcript once per key, without logging its text', async () => {
+    const transcript = JSON.parse(readFileSync(new URL('../../contract/examples/webhook-transcript-finished.json', import.meta.url)));
+    const post = (body, headers = auth) => fetch(`${appUrl}/meet/api/transcripts`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+
+    assert.equal((await post(transcript, {})).status, 401);
+    const first = await post(transcript);
+    assert.equal(first.status, 200);
+    assert.deepEqual(await first.json(), { key: transcript.key, stored: true });
+    const changedRetry = { ...transcript, lines: transcript.lines.map((line) => ({ ...line, text: 'changed retry' })) };
+    const again = await post(changedRetry);
+    assert.equal(again.status, 200);
+    assert.deepEqual(await again.json(), { key: transcript.key, stored: false });
+
+    const stored = await (await fetch(`${appUrl}/transcripts`)).json();
+    assert.equal(stored.length, 1);
+    assert.deepEqual(stored[0], transcript);
+
+    const event = (await (await fetch(`${appUrl}/events`)).json()).find((item) => item.name === 'transcripts' && !item.payload.duplicate);
+    assert.equal(event.name, 'transcripts');
+    assert.equal(event.payload.line_count, 2);
+    assert.ok(!JSON.stringify(event).includes(transcript.lines[0].text));
+
+    assert.equal((await post({ ...transcript, key: '../x' })).status, 400);
+    assert.equal((await post({ ...transcript, meeting_id: 'different' })).status, 400);
+    assert.equal((await post({ ...transcript, lines: [] })).status, 400);
+    assert.equal((await post({ key: 'k' })).status, 400);
+    assert.equal((await post('{')).status, 400);
+  });
+
   it('calls kick-user with a token signed by the control key, not the join key', async () => {
     const response = await fetch(`${appUrl}/control/kick-user?room=room-1&user=user-2`, { method: 'POST' });
     assert.equal(response.status, 200);

@@ -35,6 +35,9 @@ actual="$(meet env example-production)"
 expect "COMPOSE_PROJECT_NAME=meet-example-production"
 expect "MEET_DEPLOYMENT_DIR=$WORK/deployments/example-production"
 expect "MEET_EVENTS=1"
+expect "MEET_TRANSCRIPTS=0"
+expect "MEET_TRANSCRIPT_RETRY_HOURS=24"
+expect "MEET_TRANSCRIPT_KEEP_DAYS=7"
 expect "XMPP_MODULES=muc_size,persistent_lobby,muc_end_meeting,meet_control"
 expect "XMPP_MUC_MODULES=token_affiliation,token_lobby_bypass,token_lobby_autostart,meet_single_session,meet_privacy"
 expect 'XMPP_MUC_CONFIGURATION=app_id = "example-app",asap_key_server = "https://app.example.org/meet/keys",token_verification_allowlist = { "hidden.meet.jitsi" }'
@@ -121,6 +124,15 @@ for module in /app/gemini-live.mjs /app/gemini-transcribe-live.mjs /app/elevenla
   expect "compose $WORK/compose/stt-gateway.yml"
   grep -q 'compose/stt-provider.yml' <<<"$actual" && fail "built-in $module must not mount a private provider"
 done
+sed -i 's/^MEET_PLUGINS=.*/MEET_PLUGINS=privacy,transcripts/' "$PRIVATE/acme/deployment.env"
+actual="$(private_meet env acme)"
+expect "MEET_TRANSCRIPTS=1"
+expect "XMPP_BREAKOUT_MUC_MODULES=meet_transcription"
+sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=app-proxy/' "$PRIVATE/acme/deployment.env"
+if private_meet env acme 2>"$WORK/err"; then fail "transcripts without transcription should be refused"; fi
+grep -qF "the transcripts plugin needs MEET_FEATURES=transcription" "$WORK/err" || fail "should name the missing feature"
+sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=transcription/; s/^MEET_PLUGINS=.*/MEET_PLUGINS=privacy/' \
+  "$PRIVATE/acme/deployment.env"
 sed -i 's|^MEET_STT_PROVIDER_MODULE=.*|MEET_STT_PROVIDER_MODULE=/app/unknown.mjs|' "$PRIVATE/acme/deployment.env"
 if private_meet env acme 2>/dev/null; then fail "an unbundled /app module must be refused"; fi
 sed -i 's/^MEET_FEATURES=.*/MEET_FEATURES=app-proxy/' "$PRIVATE/acme/deployment.env"

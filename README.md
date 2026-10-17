@@ -77,6 +77,7 @@ Set the switch shown below, then `docker compose up -d`.
 | [Single session](docs/features/single-session.md) | `MEET_PLUGINS=single-session` | One seat per user across tabs and devices |
 | [Recording](docs/features/recording.md) | `MEET_FEATURES=recording` | Jibri recordings uploaded to your app with retries |
 | [Live captions](docs/features/transcription.md) | `COMPOSE_PROFILES=transcription` (images) or `MEET_FEATURES=transcription` (checkout) | Streaming Bangla/English captions through Jigasi and Gemini or ElevenLabs, starting with the class |
+| [Saved transcripts](docs/features/transcription.md#saved-transcripts) | `MEET_TRANSCRIPTS=1` (images) or `MEET_PLUGINS=transcripts` (checkout) | Send opted-in rooms' final captions to your app after the meeting |
 | [App proxy](docs/features/app-proxy.md) | `MEET_FEATURES=app-proxy` | Reach an app that runs on the same docker host |
 | Branding and wording | `brand/` in the deployment folder, `MEET_TEXT_*` | Your logo, colours, page titles and notices |
 

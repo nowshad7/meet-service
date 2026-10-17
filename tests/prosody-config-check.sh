@@ -18,4 +18,8 @@ check() {
 check -e CHECK_CASE=nothing-set
 check -e CHECK_CASE=all-set -e MEET_TRANSCRIPTION_ENABLED=1 -e MEET_EVENTS=1 -e XMPP_DOMAIN=example.org \
   -e MEET_APP_API_URL=http://app.internal/meet/api -e MEET_APP_API_TOKEN=test-token \
-  -e MEET_APP_CONTROL_KEYS_URL=http://app.internal/control-keys -e MEET_TEXT_REMOVED=Removed. -e MEET_PRIVACY_AV_MODERATION=0
+  -e MEET_APP_CONTROL_KEYS_URL=http://app.internal/control-keys -e MEET_TEXT_REMOVED=Removed. -e MEET_PRIVACY_AV_MODERATION=0 \
+  -e MEET_TRANSCRIPTS=1 -e MEET_TRANSCRIPT_RETRY_HOURS=12 -e MEET_TRANSCRIPT_KEEP_DAYS=3
+check -e CHECK_CASE=transcripts-default -e MEET_TRANSCRIPTS=1 -e MEET_APP_API_URL=http://app.internal/meet/api \
+  -e MEET_APP_API_TOKEN=test-token
+check -e CHECK_CASE=transcripts-off -e MEET_TRANSCRIPTS=0 -e MEET_APP_API_URL=http://app.internal/meet/api

@@ -1,0 +1,46 @@
+services:
+  app:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "server.mjs"]
+    volumes:
+      - ${MEET_ROOT}/examples/app-node:/app:ro
+    environment:
+      PUBLIC_URL: http://app:3000
+      JWT_APP_ID: transcripts-e2e
+      MEET_APP_API_TOKEN: transcripts-e2e-secret
+      APP_PORT: 3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  provider:
+    image: node:22-alpine
+    command: ["node", "/provider.mjs"]
+    volumes:
+      - ${MEET_ROOT}/tests/transcripts-fake-provider.mjs:/provider.mjs:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/final').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  driver:
+    image: ghcr.io/jitsi/prosody:${JITSI_IMAGE_VERSION}
+    working_dir: /work
+    entrypoint: ["lua5.4", "/check/transcripts-e2e.lua"]
+    volumes:
+      - ${MEET_ROOT}/prosody/plugins:/work/prosody/plugins:ro
+      - ${MEET_ROOT}/tests/plugins/fake_prosody.lua:/check/fake_prosody.lua:ro
+      - ${MEET_ROOT}/tests/transcripts-e2e.lua:/check/transcripts-e2e.lua:ro
+      - transcript-spool:/var/lib/prosody
+    depends_on:
+      app:
+        condition: service_healthy
+      provider:
+        condition: service_healthy
+
+volumes:
+  transcript-spool:

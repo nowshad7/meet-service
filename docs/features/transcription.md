@@ -2,12 +2,16 @@
 
 Live captions through a server-side transcriber: Jigasi joins the room as a hidden participant, streams every speaker's audio to the internal stt-gateway, and the gateway streams it to a speech-to-text provider.
 Captions appear in Jitsi's own subtitles UI, word by word.
-Nothing is saved: transcript files, audio recording, transcript URL advertising and translation are switched off.
+Jigasi does not save files, record audio, advertise transcript URLs or translate.
+Optionally, Prosody can save a room's final captions in memory and send them to the app after the room ends.
 
 Both workflows include it as an opt-in:
 
 - **Published images:** the `transcription` profile of [`deploy/compose.yml`](../../deploy/compose.yml), see [Release deployment](#release-deployment).
 - **Checkout:** `MEET_FEATURES=transcription` with `scripts/meet`, see [Source deployment](#source-deployment).
+
+Saved transcripts are a separate opt-in: set `MEET_TRANSCRIPTS=1` with published images or add `transcripts` to `MEET_PLUGINS` on a checkout.
+The room's first verified join token must also set `context.room.transcription.save: true`.
 
 With neither, no transcriber or gateway runs and nobody can request captions.
 
@@ -66,7 +70,8 @@ The profile adds two services:
 
 `deploy/compose.yml` also derives what `scripts/meet` derives on a checkout:
 
-- Prosody always loads `meet_transcription` (appended to `XMPP_MUC_MODULES`) and sets `MEET_TRANSCRIPTION_ENABLED` from `ENABLE_TRANSCRIPTIONS`.
+- Prosody loads `meet_transcription` for the main and breakout MUCs and sets `MEET_TRANSCRIPTION_ENABLED` from `ENABLE_TRANSCRIPTIONS`.
+- Saved transcripts are disabled unless `MEET_TRANSCRIPTS=1`; this switch requires live captions and the app API URL and bearer token.
 - Prosody's healthcheck waits until upstream has registered both Jigasi accounts when captions are on, and the transcriber waits for it and for the gateway.
 - The Jigasi user names, brewery and hidden domain keep their upstream defaults (`jigasi`, `transcriber`, `jigasibrewery`, `hidden.meet.jitsi`); their passwords are the `JIGASI_*_PASSWORD` entries already in `secrets.env`.
 - The live-only Jigasi properties are built into `meet-jigasi`; a `custom-sip-communicator.properties` in `data/transcriber` replaces them.
@@ -89,6 +94,7 @@ MEET_STT_PROVIDER_MODULE=/app/gemini-transcribe-live.mjs
 | Setting | Use |
 |---|---|
 | `MEET_FEATURES` contains `transcription` | Opts in; activation also requires a backend URL or provider module |
+| `MEET_PLUGINS` contains `transcripts` | Enables saved transcripts; requires `MEET_FEATURES=transcription`, `MEET_APP_API_URL` and `MEET_APP_API_TOKEN` |
 | `AUTH_TYPE=jwt` | Required for the verified token permission gate |
 | `MEET_STT_PROVIDER_MODULE` | `/app/gemini-transcribe-live.mjs`, `/app/elevenlabs.mjs`, `/app/gemini-live.mjs`, `/app/gemini.mjs`, or a private module under `/provider/` |
 | `JIGASI_TRANSCRIBER_WHISPER_URL` | Private Jigasi/Skynet-compatible WebSocket endpoint instead of the gateway; empty by default |
@@ -344,16 +350,50 @@ An entitled join token includes this context:
 ```json
 {
   "features": { "transcription": true },
-  "room": { "transcription": { "enabled": true, "language": "bn", "autoStart": true } }
+  "room": { "transcription": { "enabled": true, "language": "bn", "autoStart": true, "save": true } }
 }
 ```
 
 Use `en` for English speakers and `bn` for Bangla speakers, one language per speaker or class.
 Every participant permitted to request captions needs the feature claim; entitled speakers should carry their own language.
 `autoStart` starts captions as described above; without it, captions start from Jitsi's closed captions button.
-`save` is ignored: captions are live only.
+`save` requests a saved transcript when it is `true` on the room's first verified join token and the deployment enables the `transcripts` plugin.
+Saving remains off for tokens that omit it or set it to any value other than boolean `true`.
 Translation is outside this feature; do not select a translation/output language, since Jigasi's Whisper adapter can prefer it over the source language.
 End-to-end encrypted audio cannot be recognized by a server transcriber.
+
+## Saved transcripts
+
+Saved transcripts are opt-in at both deployment and room level.
+For published images set `MEET_TRANSCRIPTS=1` in `.env`, and keep the transcription profile enabled.
+For a checkout set `MEET_PLUGINS=transcripts` (combined with other plugins as needed) and `MEET_FEATURES=transcription`.
+The `scripts/meet` command requires the app URL and bearer token when the plugin is enabled.
+
+The first verified token fixes both caption entitlement and its save choice for the room.
+Prosody collects final captions only, associates each line with the verified token user id and name, and does not save breakout rooms.
+Interim captions remain live only.
+The transcript is sent as one `POST {MEET_APP_API_URL}/transcripts` when the main room ends.
+The app must accept idempotent retries using `key` and return any `2xx` after it has the transcript.
+See the [meet-to-app contract](../../contract/README.md#3-webhooks) for the schema and retry responses.
+
+While a class is active, transcript lines stay in Prosody memory.
+After the room ends, a mode `0600` spool file under `/var/lib/prosody/meet-transcripts/` supports retries across Prosody restarts.
+Network errors, `401`, `403`, `408`, `429` and `5xx` are retried with backoff for 24 hours after the room ends.
+Permanent `400`, `404`, `409`, `413` and `422` responses are kept for inspection, and failed or rejected files are purged after seven additional days.
+Successful `2xx` delivery deletes the spool file.
+To retry a kept file manually, POST it with the configured bearer token from the Prosody container.
+Remove the file only after a `2xx` response.
+
+```sh
+curl -fsS -H "Authorization: Bearer $MEET_APP_API_TOKEN" -H "Content-Type: application/json" \
+  --data-binary @/var/lib/prosody/meet-transcripts/<key>.rejected \
+  "$MEET_APP_API_URL/transcripts"
+```
+
+At most 20,000 lines and 4 MiB of caption text are stored for a room.
+If either limit is reached, later lines are omitted and the payload marks `truncated: true`.
+Caption text is never written to logs.
+Jigasi's own transcript saving remains disabled.
 
 ## Latency
 
@@ -382,6 +422,8 @@ Sung audio, one speaker, a few runs per setting; accuracy and cost per minute we
 ## Tests
 
 `tests/plugins/mod_meet_transcription_spec.lua` covers deployment and token permission, first-join room policy, start requests, updates and denied hidden-transcriber joins.
+`tests/plugins/mod_meet_transcripts_spec.lua` covers transcript capture, identity, caps, retry, spool recovery and purge.
+`tests/transcripts-stack-check.sh` runs an isolated fake-provider and reference-app stack through delivery, app outage and recovery, and save-off cases.
 `tests/meet-test.sh` covers opt-in, empty backend behavior, private secret generation, bundled provider modules and compose-file selection.
 `tests/transcription-language.test.mjs` covers Bangla/English participant properties after initialization and reconnects, auto-start for moderators and other participants, per-user off, transcriber restarts and inert cases.
 `tests/transcription-config-check.sh` renders pinned image templates, checks the merged `scripts/meet` compose configuration (including the `meet-jigasi` build), and checks the release compose with the `transcription` profile: key isolation, derived Prosody settings and service wiring.
