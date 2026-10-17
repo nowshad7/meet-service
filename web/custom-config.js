@@ -21,8 +21,11 @@ config.disableInviteFunctions = true;
 
 config.localRecording = { disable: true };
 
-// The live-caption pilot recognizes source speech only.
+// The live-caption pilot recognizes source speech only. Without language
+// selection the closed captions button turns the user's own captions on and
+// off directly instead of opening a dialog that offers only "Off".
 if (config.transcription?.enabled) {
+    config.transcription.translationEnabled = false;
     config.transcription.translationLanguages = [];
     config.transcription.translationLanguagesHead = [];
 }
