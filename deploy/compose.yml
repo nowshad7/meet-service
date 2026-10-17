@@ -97,11 +97,15 @@ services:
     depends_on:
       - prosody
 
+  # One recorder per simultaneous recording (docs/features/recording.md). Each
+  # replica joins the brewery under its own random nickname, so leave
+  # JIBRI_INSTANCE_ID unset when MEET_RECORDERS is above 1.
   jibri:
     <<: *service
     image: ${MEET_IMAGE_REPO:-ghcr.io/nowshad7}/meet-jibri:${MEET_VERSION:?set MEET_VERSION in .env}
     profiles:
       - recording
+    scale: ${MEET_RECORDERS:-1}
     tmpfs:
       - /run:size=256M,mode=1750,exec
       - /tmp:size=256M,mode=1777,noexec

@@ -50,6 +50,21 @@ check_bridge_registered() {
   fi
 }
 
+# Each running recorder must have joined the brewery under its own nickname;
+# a shared JIBRI_INSTANCE_ID leaves Jicofo counting fewer than are running.
+check_recorders_registered() {
+  local running count available
+  running="$(stack ps -q jibri 2>/dev/null | wc -l)"
+  ((running > 0)) || return 0
+  read -r count available < <(stack exec -T jicofo sh -c \
+    'curl -fsS http://127.0.0.1:8888/stats | jq -r ".jibri_detector | [.count, .available] | @tsv"' 2>/dev/null) || true
+  if [[ "${count:-}" == "$running" ]]; then
+    echo "ok: jicofo sees $running/$running recorders, $available available"
+  else
+    fail "jicofo sees ${count:-no} recorders, $running jibri containers are running"
+  fi
+}
+
 loaded_modules() {
   prosody prosodyctl --config /run/prosody/config/prosody.cfg.lua shell module list "$1" 2>/dev/null
 }
@@ -73,6 +88,7 @@ stack ps
 check_endpoint prosody 5280/health
 check_endpoint jvb 8080/about/health
 check_bridge_registered
+check_recorders_registered
 
 domain="$(prosody printenv XMPP_DOMAIN || true)"
 domain="${domain:-meet.jitsi}"

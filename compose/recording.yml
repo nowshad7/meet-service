@@ -1,5 +1,6 @@
 services:
   jibri:
+    scale: ${MEET_RECORDERS:-1}
     volumes:
       - ${MEET_ROOT}/services/recording-finalize/finalize.sh:/usr/local/bin/meet-finalize.sh:ro
     environment:

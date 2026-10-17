@@ -21,7 +21,7 @@ usage: scripts/meet <command> [args]
   init <name>             fetch upstream, fill empty secrets once, create the data tree
   up <name> [svc...]      start the deployment
   down <name>             stop the deployment (volumes are never removed)
-  health <name>           container state, Prosody and JVB health, operational bridge in Jicofo
+  health <name>           container state, Prosody and JVB health, operational bridge and recorders in Jicofo
   logs <name> [args...]   docker compose logs for the deployment
   env <name>              print the derived settings and compose files (no secrets)
   compose <name> [args]   any other docker compose command for the deployment
@@ -185,6 +185,8 @@ derive_feature_settings() {
     require_settings MEET_APP_API_URL MEET_APP_API_TOKEN
     export ENABLE_RECORDING=1 ENABLE_SERVICE_RECORDING=1
     export JIBRI_FINALIZE_RECORDING_SCRIPT_PATH=/usr/local/bin/meet-finalize.sh
+    export MEET_RECORDERS="${MEET_RECORDERS:-1}"
+    [[ "$MEET_RECORDERS" =~ ^[1-9][0-9]*$ ]] || die "MEET_RECORDERS must be a whole number of at least 1, got '$MEET_RECORDERS'"
   fi
 
   if has_item "$MEET_FEATURES" app-proxy; then
@@ -329,6 +331,19 @@ check_bridge_registered() {
   fi
 }
 
+# Every recorder joins the Jibri brewery; Jicofo counts them in its stats.
+check_recorders_registered() {
+  local count available
+  read -r count available < <(compose exec -T jicofo sh -c \
+    'curl -fsS http://127.0.0.1:8888/stats | jq -r ".jibri_detector | [.count, .available] | @tsv"' 2>/dev/null) || true
+  if [[ "${count:-}" == "$MEET_RECORDERS" ]]; then
+    echo "jibri: OK, $count/$MEET_RECORDERS recorders registered, $available available"
+  else
+    echo "jibri: ${count:-no} of $MEET_RECORDERS recorders registered in jicofo"
+    return 1
+  fi
+}
+
 cmd_health() {
   load_deployment "${1:-}"
   local failed=0
@@ -336,6 +351,9 @@ cmd_health() {
   check_endpoint prosody 5280/health || failed=1
   check_endpoint jvb 8080/about/health || failed=1
   check_bridge_registered || failed=1
+  if has_item "$MEET_FEATURES" recording; then
+    check_recorders_registered || failed=1
+  fi
   return "$failed"
 }
 
@@ -351,7 +369,7 @@ cmd_env() {
   for name in COMPOSE_PROJECT_NAME MEET_DEPLOYMENT_DIR CONFIG JITSI_IMAGE_VERSION MEET_FEATURES MEET_PLUGINS MEET_EVENTS \
               XMPP_MODULES XMPP_MUC_MODULES XMPP_MUC_CONFIGURATION JWT_ASAP_KEYSERVER \
               PROSODY_RESERVATION_ENABLED PROSODY_RESERVATION_REST_BASE_URL \
-              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH JICOFO_ENABLE_REST JICOFO_ENABLE_AUTH \
+              ENABLE_RECORDING JIBRI_FINALIZE_RECORDING_SCRIPT_PATH MEET_RECORDERS JICOFO_ENABLE_REST JICOFO_ENABLE_AUTH \
               MEET_TRANSCRIPTION_ENABLED ENABLE_TRANSCRIPTIONS JIGASI_XMPP_USER JIGASI_TRANSCRIBER_USER JIGASI_BREWERY_MUC; do
     echo "$name=${!name:-}"
   done

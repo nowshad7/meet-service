@@ -152,6 +152,6 @@ Room and participant webhooks come from Prosody, never from the browser, which c
 | Failure | Symptom | Response |
 |---|---|---|
 | Room gate endpoint down | No new rooms open; live rooms keep running | Keep the endpoint fast, dependency-light and highly available |
-| No recorder free | Recording does not start | Scale Jibri (`scripts/meet up <name> --scale jibri=N`); tell the moderator clearly |
+| No recorder free | Recording does not start | Raise `MEET_RECORDERS` (see [features/recording.md](features/recording.md#several-recorders)); tell the moderator clearly |
 | App unreachable for webhooks | Events retried, then dropped | Reconcile from `room/destroyed` and the room gate `DELETE` |
 | Upload keeps failing | Recording stays on the recorder | Re-run the finalize script by hand, see [features/recording.md](features/recording.md) |

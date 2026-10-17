@@ -53,6 +53,10 @@ Then set `MEET_IMAGE_REPO=meet.local` and `MEET_VERSION=dev` in a test deploymen
   `MEET_VERSION` in `.env` selects the release for every service at once; never run `latest` in production.
 - **Upgrade.**
   Read the release notes, set `MEET_VERSION` to the new version, replace `compose.yml` and compare `env.example` with the files from the same tag, then run `docker compose pull && docker compose up -d` and `tests/stack-check.sh --dir <folder>`.
+- **Recorders.**
+  `compose.yml` runs `MEET_RECORDERS` Jibri recorders (default `1`), so an upgrade keeps one until `.env` asks for more.
+  A deployment that started extra recorders with `docker compose up -d --scale jibri=N` sets `MEET_RECORDERS=N` instead; a plain `docker compose up -d` returns to that count.
+  Check the host has room for each one first, see [recording](features/recording.md#host-resources-per-recorder).
 - **Roll back.**
   Set `MEET_VERSION` and `compose.yml` back to the previous release and run `docker compose up -d`.
   Data stays in `CONFIG`, so a rollback is as quick as an upgrade, as long as the newer release did not change stored data; its release notes say so when it does.
@@ -60,6 +64,7 @@ Then set `MEET_IMAGE_REPO=meet.local` and `MEET_VERSION=dev` in a test deploymen
 ## Deployments on a checkout
 
 Check out the new release tag and run `scripts/meet up <name>`.
+Recorders started with `--scale jibri=N` become `MEET_RECORDERS=N` in `deployment.env`.
 Rolling back is checking out the previous tag and running `scripts/meet up <name>` again.
 
 ## What to look at in the report
