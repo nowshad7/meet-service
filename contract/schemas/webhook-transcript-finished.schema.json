@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meet-service/contract/v1/webhook-transcript-finished.schema.json",
+  "title": "POST {MEET_APP_API_URL}/transcripts",
+  "type": "object",
+  "required": [
+    "event_name",
+    "key",
+    "room_name",
+    "room_jid",
+    "meeting_id",
+    "is_breakout",
+    "language",
+    "created_at",
+    "destroyed_at",
+    "truncated",
+    "line_count",
+    "lines"
+  ],
+  "properties": {
+    "event_name": {
+      "const": "transcript-finished"
+    },
+    "key": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Equal to meeting_id; the idempotency key"
+    },
+    "room_name": {
+      "type": "string"
+    },
+    "room_jid": {
+      "type": "string"
+    },
+    "meeting_id": {
+      "type": "string"
+    },
+    "is_breakout": {
+      "const": false,
+      "description": "Only the main room is saved"
+    },
+    "language": {
+      "type": ["string", "null"],
+      "description": "Room language from the first token (bn or en)"
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "destroyed_at": {
+      "type": "integer",
+      "description": "Unix time in seconds"
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True when the room reached 20,000 lines or 4 MiB of text and later captions were not saved"
+    },
+    "line_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of entries in lines"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Final captions ordered by start_ms, then by arrival",
+      "items": {
+        "type": "object",
+        "required": ["id", "user_id", "name", "language", "start_ms", "end_ms", "text"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Jigasi message id of the utterance"
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "context.user.id of the speaker's verified join token; null if unknown"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "context.user.name of the speaker's verified join token; null if unknown"
+          },
+          "language": {
+            "type": ["string", "null"]
+          },
+          "start_ms": {
+            "type": "integer",
+            "description": "Unix time in milliseconds when the utterance started"
+          },
+          "end_ms": {
+            "type": "integer",
+            "description": "Unix time in milliseconds when the final caption reached the service"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          }
+        }
+      }
+    }
+  }
+}

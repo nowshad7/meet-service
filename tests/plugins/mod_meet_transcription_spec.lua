@@ -17,8 +17,8 @@ describe("mod_meet_transcription", function()
         end
         return stanza
     end
-    local function session(feature, allowed)
-        local origin = fake.session(nil, { transcription = { enabled = allowed, language = "bn" } })
+    local function session(feature, allowed, save)
+        local origin = fake.session(nil, { transcription = { enabled = allowed, language = "bn", save = save } })
         origin.auth_token = "verified-token"
         origin.jitsi_meet_room = "room"
         origin.jitsi_meet_context_features = { transcription = feature }
@@ -93,6 +93,31 @@ describe("mod_meet_transcription", function()
         room = fake.room("__jicofo-health-check-1@muc.meet.jitsi")
         join(session(true, true))
         assert.is_nil(room._data.meet_transcription)
+    end)
+    it("fixes save and language from the first entitled token", function()
+        join(session(true, true, true))
+        assert.is_true(room._data.meet_transcription_save)
+        assert.equal("bn", room._data.meet_transcription_language)
+
+        room = fake.room("room@muc.meet.jitsi")
+        join(session(true, true))
+        assert.is_false(room._data.meet_transcription_save)
+        assert.equal("bn", room._data.meet_transcription_language)
+        join(session(true, true, true))
+        assert.is_false(room._data.meet_transcription_save)
+
+        for _, value in ipairs({ "true", 1 }) do
+            room = fake.room("room@muc.meet.jitsi")
+            join(session(true, true, value))
+            assert.is_false(room._data.meet_transcription_save)
+        end
+    end)
+    it("never saves a room that is not entitled to captions", function()
+        join(session(false, true, true))
+        assert.is_false(room._data.meet_transcription_save)
+        assert.is_nil(room._data.meet_transcription_language)
+        assert.equal(1, #join(session(true, true, true)).tags)
+        assert.is_false(room._data.meet_transcription_save)
     end)
     it("rejects direct hidden transcriber invitations in denied rooms", function()
         local origin = session(nil, nil)

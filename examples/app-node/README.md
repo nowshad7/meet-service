@@ -7,7 +7,7 @@ Read it as a worked example, then build the same four pieces into your own app i
 |---|---|
 | Join token: RS256 JWT with `kid`, public key at `{keys URL}/{sha256(kid)}.pem` | `joinClaims`, `signJwt`, `GET /meet/keys/*` |
 | Room gate: approve rooms the app issued tokens for, refuse others with a message | `POST /meet/api/conference`, `GET`/`DELETE /meet/api/conference/{id}` |
-| Webhooks: bearer-checked, stored, answered fast | `POST /meet/api/events/*`, `PUT /meet/api/recordings/finished` |
+| Webhooks: bearer-checked, stored, answered fast | `POST /meet/api/events/*`, `PUT /meet/api/recordings/finished`, `POST /meet/api/transcripts` |
 | Control calls: signed with a separate control key | `POST /control/{kick-user,allow-user,end-meeting}`, `GET /meet/control-keys/*` |
 
 ## Run it
@@ -26,11 +26,12 @@ Then open <http://localhost:3000>.
 | `GET /` | A form that signs a join token and redirects to the meeting |
 | `GET /join?room=&name=&id=&moderator=1&privacy=1` | The same, scriptable |
 | `GET /events` | The last 200 webhooks and room gate calls the app received |
+| `GET /transcripts` | Every saved transcript, kept in memory, one per `key` |
 | `POST /control/kick-user?room=&user=[&ban=false]` | Remove a user; `ban=false` lets them rejoin at once |
 | `POST /control/allow-user?room=&user=` | Lift a ban |
 | `POST /control/end-meeting?room=` | End the meeting for everyone |
 
-The `/control/*` and `/events` endpoints have no authentication of their own, so the example publishes the app on `127.0.0.1` only.
+The `/control/*`, `/events` and `/transcripts` endpoints have no authentication of their own, so the example publishes the app on `127.0.0.1` only.
 In a real app they belong behind your own login and moderator checks.
 
 ## Settings
@@ -60,4 +61,4 @@ In a real app they belong behind your own login and moderator checks.
 node --test examples/app-node/app.test.mjs
 ```
 
-The tests check token signatures against the served keys, room gate answers, webhook authentication, recording storage and that control calls are signed with the control key, never the join key.
+The tests check token signatures against the served keys, room gate answers, webhook authentication, recording and transcript storage and that control calls are signed with the control key, never the join key.

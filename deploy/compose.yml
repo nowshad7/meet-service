@@ -42,7 +42,14 @@ services:
       # The caption permission gate is always loaded; it denies every request
       # unless ENABLE_TRANSCRIPTIONS=1 and the room's token entitles it.
       - XMPP_MUC_MODULES=${XMPP_MUC_MODULES:-},meet_transcription
+      # Breakout rooms use the same verified-token caption entitlement gate.
+      - XMPP_BREAKOUT_MUC_MODULES=${XMPP_BREAKOUT_MUC_MODULES:-},meet_transcription
       - MEET_TRANSCRIPTION_ENABLED=${ENABLE_TRANSCRIPTIONS:-0}
+      # Saved transcripts are off unless .env sets MEET_TRANSCRIPTS=1; the spool
+      # lives in the Prosody data volume below (/var/lib/prosody/meet-transcripts).
+      - MEET_TRANSCRIPTS=${MEET_TRANSCRIPTS:-0}
+      - MEET_TRANSCRIPT_RETRY_HOURS=${MEET_TRANSCRIPT_RETRY_HOURS:-24}
+      - MEET_TRANSCRIPT_KEEP_DAYS=${MEET_TRANSCRIPT_KEEP_DAYS:-7}
     healthcheck:
       # With captions on, also wait until upstream has registered both Jigasi
       # accounts, so the transcriber's first login does not race them.

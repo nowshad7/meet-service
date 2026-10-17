@@ -15,7 +15,7 @@ render() {
     -e JIGASI_XMPP_PASSWORD=test-brewery-password \
     -e JIGASI_TRANSCRIBER_USER=pilot-transcriber -e JIGASI_TRANSCRIBER_PASSWORD=test-hidden-password \
     -e XMPP_HIDDEN_DOMAIN=hidden.pilot.test -e XMPP_AUTH_DOMAIN=auth.pilot.test \
-    -e XMPP_INTERNAL_MUC_DOMAIN=internal-muc.pilot.test \
+    -e XMPP_INTERNAL_MUC_DOMAIN=internal-muc.pilot.test -e XMPP_BREAKOUT_MUC_MODULES=meet_transcription \
     -e XMPP_MUC_MODULES=meet_transcription \
     -e JIGASI_TRANSCRIBER_ENABLE_SAVING=false -e JIGASI_TRANSCRIBER_ENABLE_TRANSLATION=false \
     -e JIGASI_TRANSCRIBER_CUSTOM_SERVICE=org.jitsi.jigasi.transcription.WhisperTranscriptionService \
@@ -31,6 +31,14 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
 if (context.config.transcription.translationLanguages.length) process.exit(1);' /check/web.js
 render jicofo /defaults/jicofo.conf >"$WORK/jicofo.conf"
 render prosody /defaults/conf.d/jitsi-meet.cfg.lua >"$WORK/prosody.lua"
+python3 - "$WORK/prosody.lua" <<'PY'
+import sys
+config = open(sys.argv[1]).read()
+start = config.index('Component "breakout.')
+end = config.find('\nComponent ', start + 1)
+breakout = config[start:] if end < 0 else config[start:end]
+assert '"meet_transcription"' in breakout, 'breakout MUC must load the caption entitlement gate'
+PY
 render jigasi /defaults/transcriber-sip-communicator.properties >"$WORK/transcriber.properties"
 cat "$ROOT/compose/transcription.properties" >>"$WORK/transcriber.properties"
 grep -q 'enabled: true' "$WORK/web.js"
@@ -68,8 +76,24 @@ assert not t['environment'].get('JIGASI_TRANSCRIBER_WHISPER_PRIVATE_KEY')
 for service in ['web', 'prosody', 'jicofo']:
     assert services[service]['environment']['ENABLE_TRANSCRIPTIONS'] == '1'
 assert 'meet_transcription' in services['prosody']['environment']['XMPP_MUC_MODULES']
+assert 'meet_transcription' in services['prosody']['environment']['XMPP_BREAKOUT_MUC_MODULES']
 assert any(v['target'] == '/config/custom-sip-communicator.properties' for v in t['volumes'])
+assert services['prosody']['environment']['MEET_TRANSCRIPTS'] == '0'
+assert any(v['target'] == '/config/conf.d/meet-transcripts.cfg.lua' for v in services['prosody']['volumes'])
 PY
+# Saved transcripts reach Prosody only when the deployment adds the plugin.
+sed -i 's/^MEET_PLUGINS=.*/MEET_PLUGINS=events,transcripts/' "$WORK/deployments/pilot/deployment.env"
+printf 'MEET_TRANSCRIPT_RETRY_HOURS=12\n' >>"$WORK/deployments/pilot/deployment.env"
+"$WORK/scripts/meet" compose pilot config --format json >"$WORK/transcripts-compose.json"
+python3 - "$WORK/transcripts-compose.json" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1]))['services']['prosody']['environment']
+assert p['MEET_TRANSCRIPTS'] == '1' and p['MEET_TRANSCRIPT_RETRY_HOURS'] == '12'
+assert p['MEET_TRANSCRIPT_KEEP_DAYS'] == '7'
+assert p['MEET_APP_API_URL'] and p['MEET_APP_API_TOKEN']
+PY
+sed -i 's/^MEET_PLUGINS=.*/MEET_PLUGINS=events,control,single-session,privacy/; /^MEET_TRANSCRIPT_RETRY_HOURS=/d' \
+  "$WORK/deployments/pilot/deployment.env"
 # Internal gateway adds no published port and replaces the external URL only when configured.
 printf '\nMEET_STT_PROVIDER_MODULE=/provider/adapter.mjs\nMEET_STT_PROVIDER_DIR=%s\n' "$WORK/provider" >>"$WORK/deployments/pilot/deployment.env"
 "$WORK/scripts/meet" compose pilot config --format json >"$WORK/gateway-compose.json"
@@ -126,8 +150,19 @@ assert t['depends_on']['prosody']['condition'] == 'service_healthy'
 assert t['depends_on']['stt-gateway']['condition'] == 'service_healthy'
 assert p['environment']['XMPP_MUC_MODULES'].endswith(',meet_transcription')
 assert p['environment']['MEET_TRANSCRIPTION_ENABLED'] == '1'
+assert 'meet_transcription' in p['environment']['XMPP_BREAKOUT_MUC_MODULES']
 assert 'shell user list' in p['healthcheck']['test'][1]
 for service in ['web', 'jicofo']:
     assert services[service]['environment']['ENABLE_TRANSCRIPTIONS'] == '1'
+assert p['environment']['MEET_TRANSCRIPTS'] == '0', 'saved transcripts must be off by default'
+assert p['environment']['MEET_TRANSCRIPT_RETRY_HOURS'] == '24'
+assert p['environment']['MEET_TRANSCRIPT_KEEP_DAYS'] == '7'
+assert any(v['target'] == '/var/lib/prosody' for v in p['volumes'])
+PYCODE
+sed -i 's/^MEET_TRANSCRIPTS=.*/MEET_TRANSCRIPTS=1/' "$WORK/release/.env"
+COMPOSE_PROFILES=transcription docker compose --project-directory "$WORK/release" config --format json >"$WORK/release.json"
+python3 - "$WORK/release.json" <<'PYCODE'
+import json, sys
+assert json.load(open(sys.argv[1]))['services']['prosody']['environment']['MEET_TRANSCRIPTS'] == '1'
 PYCODE
 printf 'transcription generated config: ok\n'

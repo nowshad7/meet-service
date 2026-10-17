@@ -126,6 +126,7 @@ export function createApp(config) {
   const defaultRoom = config.defaultRoom ?? randomUUID();
   const issuedRooms = new Set();
   const conferences = new Map();
+  const transcripts = new Map();
   const events = [];
 
   const requireBearer = (req) => {
@@ -206,6 +207,31 @@ export function createApp(config) {
     recordEvent('recordings/finished', { key, meeting_url: url.searchParams.get('meeting_url') });
   };
 
+  // First write wins: a retried delivery with the same key is answered 200 and not stored again.
+  const saveTranscript = (transcript) => {
+    if (transcript?.event_name !== 'transcript-finished'
+      || typeof transcript.key !== 'string'
+      || !/^[\w-]{1,128}$/.test(transcript.key)
+      || transcript.meeting_id !== transcript.key
+      || !Array.isArray(transcript.lines)
+      || transcript.lines.length < 1) {
+      throw new HttpError(400, { message: 'invalid transcript' });
+    }
+    const duplicate = transcripts.has(transcript.key);
+    if (!duplicate) {
+      transcripts.set(transcript.key, transcript);
+    }
+    // The summary only: caption text stays out of the event list and the log.
+    recordEvent('transcripts', {
+      key: transcript.key,
+      meeting_id: transcript.meeting_id,
+      line_count: transcript.lines.length,
+      truncated: transcript.truncated,
+      duplicate,
+    });
+    return { key: transcript.key, stored: !duplicate };
+  };
+
   const publicKey = (keyPair, fileName) => {
     if (fileName !== keyPair.fileName) {
       throw new HttpError(404, 'unknown key');
@@ -226,6 +252,9 @@ export function createApp(config) {
     }
     if (method === 'GET' && path === '/events') {
       return send(res, 200, events);
+    }
+    if (method === 'GET' && path === '/transcripts') {
+      return send(res, 200, [...transcripts.values()]);
     }
     if (method === 'GET' && path.startsWith('/meet/keys/')) {
       return send(res, 200, publicKey(joinKeys, path.slice('/meet/keys/'.length)));
@@ -266,6 +295,15 @@ export function createApp(config) {
       recordEvent(endpoint, JSON.parse(await readBody(req)));
       return send(res, 200, { ok: true });
     }
+    if (method === 'POST' && endpoint === 'transcripts') {
+      let transcript;
+      try {
+        transcript = JSON.parse(await readBody(req));
+      } catch {
+        throw new HttpError(400, { message: 'invalid JSON' });
+      }
+      return send(res, 200, saveTranscript(transcript));
+    }
     if (method === 'PUT' && endpoint === 'recordings/finished') {
       await saveRecording(req, url);
       return send(res, 200, { ok: true });
@@ -284,5 +322,5 @@ export function createApp(config) {
     }
   };
 
-  return { handle, joinKeys, controlKeys, events, approveRoom, issuedRooms, defaultRoom };
+  return { handle, joinKeys, controlKeys, events, transcripts, approveRoom, issuedRooms, defaultRoom };
 }

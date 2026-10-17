@@ -48,7 +48,7 @@ Schema: [join-token.schema.json](schemas/join-token.schema.json), example: [join
 | `privacy: true` | Participants stay muted until a moderator approves them, unless the deployment sets `MEET_PRIVACY_AV_MODERATION=0`; they cannot post to the group chat and may send private messages to moderators only | `privacy` |
 | `publicChat: false` | Participants cannot post to the group chat; private messages stay open | `privacy` |
 | `lobby_autostart: false` | The lobby does not switch on automatically for this room | upstream `token_lobby_autostart` |
-| `transcription` | `{enabled, language, autoStart, save}` for live captions | [live captions](../docs/features/transcription.md); uses `enabled`, `language` (`bn`/`en`) and `autoStart` (start with the class), ignores `save` |
+| `transcription` | `{enabled, language, autoStart, save}` for live captions | [live captions](../docs/features/transcription.md); uses `enabled`, `language` (`bn`/`en`) and `autoStart` (start with the class); `save: true` also sends the room's transcript to the app when it ends, with the `transcripts` plugin |
 
 Room options come from the first token that carries them; later tokens do not change a room that is already set.
 Anything missing falls back to the deployment default.
@@ -89,7 +89,7 @@ It retries on network errors and 5xx responses, so the same event can arrive twi
 | Participant left | `POST events/occupant/left` | [schema](schemas/webhook-occupant-left.schema.json) | [example](examples/webhook-occupant-left.json) |
 | Room destroyed | `POST events/room/destroyed` | [schema](schemas/webhook-room-destroyed.schema.json) | [example](examples/webhook-room-destroyed.json) |
 | Recording uploaded | `PUT recordings/finished?key=&meeting_url=` | [schema](schemas/recording-upload.schema.json) | [example](examples/recording-upload.json) |
-| Transcript line | `POST transcripts` | reserved for captions | |
+| Transcript finished | `POST transcripts` | [schema](schemas/webhook-transcript-finished.schema.json) | [example](examples/webhook-transcript-finished.json) |
 
 Room and participant events need the `events` plugin.
 Every event carries `room_name`, `room_jid`, `meeting_id` and `is_breakout`; for a breakout room, `room_name` and `room_jid` name the main room and `breakout_room_id` and `breakout_meeting_id` name the breakout.
@@ -100,6 +100,15 @@ The recording upload needs the `recording` feature.
 Its body is the `video/mp4` file.
 `key` is unique per recording and is the idempotency key.
 Any `2xx` means the app has the file and the service deletes its copy; anything else is retried for about 15 minutes, after which the files stay on the recorder for a manual retry.
+
+The transcript needs the `transcripts` plugin and live captions.
+It is sent once, when a main room whose first token set `context.room.transcription.save: true` ends with at least one final caption.
+Each line names its speaker by the `context.user.id` and `context.user.name` of the verified join token, never by presence.
+`key` equals `meeting_id` and is the idempotency key: a repeat with the same `key` must answer `2xx` without storing it twice.
+Any `2xx` means the app has the transcript and the service deletes its copy.
+`400`, `404`, `409`, `413` and `422` are permanent: the service keeps the file aside and does not retry.
+Anything else, including network errors, `401`, `403` and `429`, is retried at once, after 30 s, 1, 2, 5, 10 and 30 minutes and then hourly, for 24 hours after the room ended.
+Bodies stay under 8 MiB (at most 20,000 lines and 4 MiB of text, after which `truncated` is `true`), so accept at least that much.
 
 ## 4. Control calls
 

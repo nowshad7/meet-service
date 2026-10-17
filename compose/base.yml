@@ -13,10 +13,14 @@ services:
       - ${MEET_ROOT}/prosody/plugins:/prosody-plugins-custom:ro
       - ${MEET_ROOT}/prosody/conf.d/meet.cfg.lua:/config/conf.d/meet.cfg.lua:ro
       - ${MEET_ROOT}/prosody/conf.d/meet-events.cfg.lua:/config/conf.d/meet-events.cfg.lua:ro
+      - ${MEET_ROOT}/prosody/conf.d/meet-transcripts.cfg.lua:/config/conf.d/meet-transcripts.cfg.lua:ro
     environment:
       - XMPP_DOMAIN
       - XMPP_MUC_DOMAIN
       - MEET_EVENTS
+      - MEET_TRANSCRIPTS
+      - MEET_TRANSCRIPT_RETRY_HOURS
+      - MEET_TRANSCRIPT_KEEP_DAYS
       - MEET_APP_API_URL
       - MEET_APP_API_TOKEN
       - MEET_APP_CONTROL_KEYS_URL

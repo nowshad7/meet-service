@@ -40,8 +40,14 @@ module:hook("muc-occupant-pre-join", function(event)
     if not util.is_admin(occupant.bare_jid) and room._data.meet_transcription == nil then
         local context = session and session.jitsi_meet_context_room;
         local options = context and context.transcription;
-        room._data.meet_transcription = enabled and entitled(session) == true
+        local allowed = enabled and entitled(session) == true
             and type(options) == "table" and options.enabled == true;
+        room._data.meet_transcription = allowed;
+        -- Read by mod_meet_transcripts; fixed by the same first token, so a later one cannot turn saving on.
+        room._data.meet_transcription_save = allowed and options.save == true;
+        if allowed and type(options.language) == "string" then
+            room._data.meet_transcription_language = options.language;
+        end
     end
     filter_request(event);
 end, 1); -- after token_verification (99), before the presence is saved/broadcast
