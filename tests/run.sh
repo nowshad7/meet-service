@@ -14,6 +14,13 @@ run_tool() {
   fi
 }
 
+expect_recorders() {
+  COMPOSE_PROFILES=recording docker compose --project-directory "$1" config jibri | grep -qxF "    scale: $2" || {
+    echo "deploy/compose.yml should run $2 jibri recorder(s)" >&2
+    return 1
+  }
+}
+
 check_deploy_compose() {
   local dir
   dir="$(mktemp -d)"
@@ -21,6 +28,15 @@ check_deploy_compose() {
   cp "$dir/env.example" "$dir/.env"
   cp "$dir/secrets.env.example" "$dir/secrets.env"
   COMPOSE_PROFILES=recording,app-proxy docker compose --project-directory "$dir" config --quiet
+  expect_recorders "$dir" 1
+  sed -i 's/^MEET_RECORDERS=.*/MEET_RECORDERS=3/' "$dir/.env"
+  expect_recorders "$dir" 3
+  sed -i 's/^MEET_RECORDERS=.*/MEET_RECORDERS=three/' "$dir/.env"
+  if COMPOSE_PROFILES=recording docker compose --project-directory "$dir" config --quiet 2>/dev/null; then
+    echo "MEET_RECORDERS=three should be refused" >&2
+    return 1
+  fi
+  sed -i 's/^MEET_RECORDERS=.*/MEET_RECORDERS=1/' "$dir/.env"
   cp "$dir/stt-secrets.env.example" "$dir/stt-secrets.env"
   COMPOSE_PROFILES=recording,app-proxy,transcription docker compose --project-directory "$dir" config --quiet
   rm -rf "$dir"
