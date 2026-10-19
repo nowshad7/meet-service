@@ -222,6 +222,7 @@ It takes any [docker-jitsi-meet variable](https://jitsi.github.io/handbook/docs/
 | `MEET_RECORDERS` | With `recording`: recorders, one per simultaneous recording (default `1`, see [recording](features/recording.md#several-recorders)) |
 | `MEET_APP_API_URL` | Base URL of the app's endpoints (room gate, webhooks, recordings) |
 | `MEET_APP_KEYS_URL` | Join-token public keys; becomes `JWT_ASAP_KEYSERVER` and the MUC `asap_key_server` |
+| `JWT_ACCEPTED_AUDIENCES` | Comma-separated JWT audiences accepted for meeting joins; set `jitsi` for LMS class tokens and recorder passes |
 | `MEET_APP_CONTROL_KEYS_URL` | Control-token public keys, for `control` |
 | `MEET_APP_PROXY_HOST`, `MEET_APP_PROXY_ALIAS` | For `app-proxy`: the host name of the app on the docker host, and the name Prosody uses for it (default `app.internal`) |
 | `MEET_CONTROL_BIND`, `MEET_CONTROL_PORT` | Where Prosody's HTTP port is published for control calls (default `127.0.0.1:5280`) |
